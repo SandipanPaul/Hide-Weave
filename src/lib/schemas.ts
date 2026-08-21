@@ -1,0 +1,337 @@
+import { z } from "zod";
+import {
+  CLIENT_STATUSES,
+  PROJECT_STATUSES,
+  SAMPLING_STATUSES,
+} from "@/lib/enums";
+import { joinContacts, splitContacts } from "@/lib/contacts";
+import { resolveCountry } from "@/lib/countries";
+import { normalizeWebsite } from "@/lib/url";
+import type { ContactKind } from "@/lib/enums";
+import { DEFAULT_CURRENCY, MoneyError, parseMoneyToMinor } from "@/lib/money";
+
+/**
+ * Shared by client-side forms and server actions. Server actions re-validate
+ * with these same schemas — client-side validation is a convenience, never a
+ * trust boundary.
+ */
+
+/**
+ * Normalises the three ways "no value" reaches us into a single `undefined`:
+ * an absent FormData field (`null`), an empty input (`""`), and whitespace.
+ *
+ * The `null` case matters: `FormData.get()` returns null for a field that was
+ * never rendered, and a plain `.optional()` rejects null.
+ */
+const blankToUndefined = (value: unknown) => {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
+};
+
+/** Optional free text: blank in, undefined out. */
+const optionalText = z.preprocess(blankToUndefined, z.string().optional());
+
+const optionalEmail = z.preprocess(
+  blankToUndefined,
+  z.email("Enter a valid email address.").optional(),
+);
+
+/**
+ * A website, stored in canonical form.
+ *
+ * A bare domain is accepted and assumed to be https — "asianleather.com" is
+ * what people type and paste, and rejecting it taught them nothing. Anything
+ * that is not a usable web address is still an error rather than a silently
+ * dropped value.
+ */
+const optionalWebsite = z.preprocess(
+  blankToUndefined,
+  z
+    .string()
+    .optional()
+    .transform((value, ctx) => {
+      if (value === undefined) return undefined;
+      const normalized = normalizeWebsite(value);
+      if (!normalized) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Enter a web address, e.g. example.com or https://example.com",
+        });
+        return undefined;
+      }
+      return normalized;
+    }),
+);
+
+/**
+ * A country name, an ISO alpha-2 code, or a common alias ("USA", "UK"), stored
+ * as the canonical alpha-2 code. Blank means no country; anything unrecognised
+ * is an error rather than a silently dropped value.
+ */
+const optionalCountry = z.preprocess(
+  blankToUndefined,
+  z
+    .string()
+    .optional()
+    .transform((value, ctx) => {
+      if (value === undefined) return undefined;
+      const code = resolveCountry(value);
+      if (!code) {
+        ctx.addIssue({
+          code: "custom",
+          message: `“${value}” is not a country we recognise. Use a name or 2-letter code, e.g. India or IN.`,
+        });
+        return undefined;
+      }
+      return code;
+    }),
+);
+
+/**
+ * A list of phone numbers or email addresses.
+ *
+ * Accepts whatever shape the caller has: a single cell from a CSV
+ * ("a@x.com/b@x.com"), several repeated form fields, or nothing at all. All of
+ * them are split on the usual delimiters, de-obfuscated, de-duplicated, and
+ * come out as an ordered array.
+ */
+function contactListSchema(kind: ContactKind, invalidMessage?: string) {
+  return z.preprocess(
+    (value) => {
+      const parts = (Array.isArray(value) ? value : [value]).filter(
+        (part): part is string => typeof part === "string",
+      );
+      // Re-joining and splitting once removes duplicates across parts as well
+      // as within each one.
+      return splitContacts(joinContacts(parts), kind);
+    },
+    invalidMessage
+      ? z.array(z.email(invalidMessage))
+      : z.array(z.string().min(1)),
+  );
+}
+
+/** An optional field that still has a default when omitted (selects, enums). */
+function optionalWithDefault<T extends z.ZodTypeAny>(schema: T) {
+  return z.preprocess(blankToUndefined, schema);
+}
+
+export const currencySchema = optionalWithDefault(
+  z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/, "Use a 3-letter ISO currency code, e.g. INR.")
+    .default(DEFAULT_CURRENCY),
+);
+
+/**
+ * Money arrives from forms and CSVs as text. Parsing needs the currency (to
+ * know how many minor digits it has), so this is a factory applied inside the
+ * parent object's transform rather than a standalone field schema.
+ */
+function parseMoneyField(
+  value: string,
+  currency: string,
+  ctx: z.RefinementCtx,
+  path: string,
+): bigint | undefined {
+  try {
+    return parseMoneyToMinor(value, currency);
+  } catch (err) {
+    ctx.addIssue({
+      code: "custom",
+      path: [path],
+      message: err instanceof MoneyError ? err.message : "Enter a valid amount.",
+    });
+    return undefined;
+  }
+}
+
+/** Dates come from <input type="date"> as "YYYY-MM-DD" and are stored UTC-midnight. */
+export const dateStringSchema = z
+  .string({ error: "A date is required." })
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use the date picker, or type YYYY-MM-DD.")
+  // Date.parse rolls impossible dates over (2026-02-31 becomes 2026-03-03), so
+  // the only reliable check is to build the date and read the parts back.
+  .refine((v) => {
+    const [year, month, day] = v.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return (
+      date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day
+    );
+  }, "That date doesn't exist.");
+
+const optionalDateString = z.preprocess(blankToUndefined, dateStringSchema.optional());
+
+// ---------------------------------------------------------------- Client
+
+export const clientInputSchema = z
+  .object({
+    name: z.string().trim().min(1, "Name is required.").max(200),
+    address: optionalText,
+    country: optionalCountry,
+    phones: contactListSchema("PHONE"),
+    emails: contactListSchema("EMAIL", "Enter a valid email address."),
+    website: optionalWebsite,
+    contactPerson: optionalText,
+    status: optionalWithDefault(z.enum(CLIENT_STATUSES).default("ACTIVE")),
+    fixedMonthly: optionalText,
+    currency: currencySchema,
+    notes: optionalText,
+  })
+  // Phone and email are each optional, but a client with neither is
+  // unreachable. This is a property of the whole object, so it is refined here
+  // and reported at form level rather than blamed on one of the two fields.
+  .refine((data) => data.phones.length > 0 || data.emails.length > 0, {
+    message: "Give at least one way to reach this client — a phone number or an email address.",
+    path: [],
+  })
+  .transform((data, ctx) => {
+    const fixedMonthly =
+      data.fixedMonthly === undefined
+        ? undefined
+        : parseMoneyField(data.fixedMonthly, data.currency, ctx, "fixedMonthly");
+    return { ...data, fixedMonthly };
+  });
+
+export type ClientInput = z.infer<typeof clientInputSchema>;
+
+// -------------------------------------------------------- ClientSampling
+
+export const samplingInputSchema = z.object({
+  clientId: z.string().min(1, "A client is required."),
+  scheduledDate: dateStringSchema,
+  product: optionalText,
+  status: optionalWithDefault(z.enum(SAMPLING_STATUSES).default("SCHEDULED")),
+  notes: optionalText,
+});
+
+export type SamplingInput = z.infer<typeof samplingInputSchema>;
+
+// -------------------------------------------------------------- Exporter
+
+export const exporterInputSchema = z.object({
+  companyName: z.string().trim().min(1, "Company name is required.").max(200),
+  website: optionalWebsite,
+  contactPerson: optionalText,
+  email: optionalEmail,
+  phone: optionalText,
+  address: optionalText,
+  sourceUrl: optionalWebsite,
+  notes: optionalText,
+});
+
+export type ExporterInput = z.infer<typeof exporterInputSchema>;
+
+// --------------------------------------------------------------- Project
+
+export const projectInputSchema = z
+  .object({
+    clientId: z.string().min(1, "A client is required."),
+    exporterId: optionalText,
+    product: z.string().trim().min(1, "Product is required.").max(200),
+    orderId: z.string().trim().min(1, "Order ID is required.").max(100),
+    quantity: z.coerce
+      .number({ error: "Quantity must be a number." })
+      .int("Quantity must be a whole number.")
+      .positive("Quantity must be greater than zero."),
+    unit: optionalWithDefault(z.string().trim().min(1).max(20).default("pcs")),
+    orderValue: z.string().trim().min(1, "Order value is required."),
+    commissionPercentage: z.coerce
+      .number({ error: "Commission % must be a number." })
+      .min(0, "Commission % cannot be negative.")
+      .max(100, "Commission % cannot exceed 100."),
+    currency: currencySchema,
+    status: optionalWithDefault(z.enum(PROJECT_STATUSES).default("QUOTED")),
+    orderDate: dateStringSchema,
+    expectedDelivery: optionalDateString,
+    actualDelivery: optionalDateString,
+    notes: optionalText,
+  })
+  .transform((data, ctx) => ({
+    ...data,
+    orderValue: parseMoneyField(data.orderValue, data.currency, ctx, "orderValue") ?? 0n,
+  }));
+
+export type ProjectInput = z.infer<typeof projectInputSchema>;
+
+// --------------------------------------------------------------- Payment
+
+/**
+ * A payment settles the agent's commission on a project — not the order value.
+ * The currency is inherited from the parent project and passed in for parsing.
+ */
+export function makePaymentInputSchema(currency: string) {
+  return z
+    .object({
+      projectId: z.string().min(1, "A project is required."),
+      amount: z.string().trim().min(1, "Amount is required."),
+      paidOn: dateStringSchema,
+      method: optionalText,
+      notes: optionalText,
+    })
+    .transform((data, ctx) => ({
+      ...data,
+      amount: parseMoneyField(data.amount, currency, ctx, "amount") ?? 0n,
+    }));
+}
+
+export type PaymentInput = z.infer<ReturnType<typeof makePaymentInputSchema>>;
+
+// ----------------------------------------------------------- List queries
+
+export const listQuerySchema = z.object({
+  q: z.string().trim().max(200).optional(),
+  sort: z.string().trim().max(50).optional(),
+  dir: z.enum(["asc", "desc"]).default("desc"),
+  page: z.coerce.number().int().min(1).default(1),
+});
+
+export type ListQuery = z.infer<typeof listQuerySchema>;
+
+export type FieldErrors = Record<string, string[] | undefined>;
+
+export type ActionResult<T = void> =
+  | { ok: true; data: T }
+  | { ok: false; formErrors: string[]; fieldErrors: FieldErrors };
+
+/** A rejected write, with the reasons attached to the fields that caused them. */
+export function invalid(error: z.ZodError): ActionResult<never> {
+  const { formErrors, fieldErrors } = formatZodError(error);
+  return { ok: false, formErrors, fieldErrors };
+}
+
+/**
+ * A rejected write for a reason Zod cannot know: a name already taken, a
+ * record that vanished, a save that failed. Naming a field puts the message
+ * on that input; omitting one puts it at the top of the form.
+ */
+export function failure(message: string, field?: string): ActionResult<never> {
+  return field
+    ? { ok: false, formErrors: [], fieldErrors: { [field]: [message] } }
+    : { ok: false, formErrors: [message], fieldErrors: {} };
+}
+
+/**
+ * Flattens a ZodError into `{ formErrors, fieldErrors }` for rendering. Object
+ * level refinements (like "phone or email") land in formErrors.
+ */
+export function formatZodError(error: z.ZodError): {
+  formErrors: string[];
+  fieldErrors: FieldErrors;
+} {
+  const flat = z.flattenError(error);
+  return {
+    formErrors: flat.formErrors,
+    // Widened deliberately: on schemas with a .transform the inferred output
+    // type loses the input keys, but the issues still carry them.
+    fieldErrors: flat.fieldErrors as FieldErrors,
+  };
+}
+

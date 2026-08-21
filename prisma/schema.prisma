@@ -1,0 +1,183 @@
+// Hide & Weave — commission agent management app.
+//
+// Portability note: this schema targets SQLite for local dev but is written so
+// that moving to Postgres is a connection-string change only:
+//   * No SQLite-specific types are used.
+//   * Status columns are `String`, not Prisma enums (SQLite has no enum support,
+//     so using them would force a schema rewrite on migration). Zod owns the
+//     allowed values — see src/lib/enums.ts.
+//   * Money is `BigInt` (64-bit on SQLite, int8 on Postgres) so order values
+//     have no practical ceiling.
+//   * Uniqueness (Client.name, Project.orderId, Exporter.website) is enforced in
+//     server actions scoped to `deletedAt: null`, not by DB constraints — a soft
+//     deleted row must not permanently reserve a name.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Client {
+  id            String  @id @default(cuid())
+  name          String
+  address       String?
+  /// ISO 3166-1 alpha-2 code, e.g. "IN". Names are derived for display, so the
+  /// same country typed several ways still groups as one.
+  country       String?
+  website       String?
+  contactPerson String?
+  status        String  @default("ACTIVE")
+
+  /// Fixed monthly retainer in minor units (paise for INR). Independent of
+  /// per-order commission.
+  fixedMonthly BigInt?
+  /// Currency of `fixedMonthly`. Per-order currency lives on Project.
+  currency     String  @default("INR")
+
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  samplings ClientSampling[]
+  projects  Project[]
+  /// Phone numbers and email addresses, ordered. The first of each kind is
+  /// treated as the primary one for lists and sorting.
+  contacts  ClientContact[]
+
+  @@index([deletedAt])
+  @@index([name])
+  @@index([status])
+  @@index([country])
+}
+
+model ClientContact {
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  /// "PHONE" or "EMAIL" — see src/lib/enums.ts.
+  kind     String
+  value    String
+  /// Order within its kind, so the client's own preference is preserved.
+  position Int    @default(0)
+
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([clientId])
+  @@index([kind])
+  @@index([value])
+  @@index([deletedAt])
+}
+
+model ClientSampling {
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  scheduledDate DateTime
+  product       String?
+  status        String   @default("SCHEDULED")
+
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([clientId])
+  @@index([deletedAt])
+  @@index([scheduledDate])
+  @@index([status])
+}
+
+model Exporter {
+  id            String  @id @default(cuid())
+  companyName   String
+  website       String?
+  contactPerson String?
+  email         String?
+  phone         String?
+  address       String?
+  /// Set when the record was created or refreshed via website extraction.
+  sourceUrl     String?
+
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  projects Project[]
+
+  @@index([deletedAt])
+  @@index([companyName])
+}
+
+model Project {
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  exporterId String?
+  exporter   Exporter? @relation(fields: [exporterId], references: [id], onDelete: SetNull)
+
+  product  String
+  orderId  String
+  quantity Int
+  unit     String @default("pcs")
+
+  /// Total consignment value in minor units. This is goods routed through the
+  /// agent — it is NOT income. Income is the commission computed from it.
+  orderValue           BigInt
+  /// Percentage of orderValue earned as commission. The commission amount is
+  /// always computed (see src/lib/money.ts), never stored.
+  commissionPercentage Float
+  currency             String @default("INR")
+
+  status           String    @default("QUOTED")
+  orderDate        DateTime
+  expectedDelivery DateTime?
+  actualDelivery   DateTime?
+
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  payments Payment[]
+
+  @@index([clientId])
+  @@index([exporterId])
+  @@index([deletedAt])
+  @@index([orderId])
+  @@index([status])
+  @@index([orderDate])
+  @@index([currency])
+}
+
+model Payment {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// Amount in minor units, in the parent project's currency. Payments settle
+  /// the agent's commission, not the order value.
+  amount BigInt
+  paidOn DateTime
+  method String?
+
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([projectId])
+  @@index([deletedAt])
+  @@index([paidOn])
+}

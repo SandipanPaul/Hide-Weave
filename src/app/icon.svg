@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Hide & Weave">
+  <!-- Two bands over, two under: the simplest thing that reads as a weave at
+       16px, in the same monochrome as the rest of the app. -->
+  <rect width="32" height="32" rx="7" fill="#171717" />
+  <g fill="#fafafa">
+    <rect x="7" y="6" width="4" height="20" rx="1.2" />
+    <rect x="21" y="6" width="4" height="20" rx="1.2" />
+  </g>
+  <g fill="#a3a3a3">
+    <rect x="6" y="11" width="20" height="4" rx="1.2" />
+    <rect x="6" y="17" width="20" height="4" rx="1.2" />
+  </g>
+  <!-- The vertical bands pass back over the horizontal ones on alternate
+       crossings, which is what makes it read as interlaced rather than as a
+       grid. -->
+  <g fill="#fafafa">
+    <rect x="7" y="11" width="4" height="4" rx="1.2" />
+    <rect x="21" y="17" width="4" height="4" rx="1.2" />
+  </g>
+</svg>
