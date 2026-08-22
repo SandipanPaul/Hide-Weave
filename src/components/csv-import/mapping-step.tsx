@@ -38,7 +38,7 @@ export function MappingStep({
   }
 
   return (
-    <div className="min-w-0 space-y-4">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
       {missing.length > 0 ? (
         <div
           role="alert"
@@ -51,7 +51,7 @@ export function MappingStep({
         </div>
       ) : null}
 
-      <div className="max-h-[45vh] space-y-2 overflow-y-auto pr-1">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
         {headers.map((header) => {
           const value = mapping[header];
           const sample = sampleRow?.[header];

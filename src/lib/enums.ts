@@ -10,7 +10,14 @@
 export const CONTACT_KINDS = ["PHONE", "EMAIL"] as const;
 export type ContactKind = (typeof CONTACT_KINDS)[number];
 
-export const CLIENT_STATUSES = ["ACTIVE", "INACTIVE"] as const;
+/**
+ * Where a client stands.
+ *
+ * CHASING is someone being pursued who has not ordered yet — the natural first
+ * state for a name that arrived from a contact list. ACTIVE is a client
+ * placing orders; INACTIVE is one who has stopped.
+ */
+export const CLIENT_STATUSES = ["CHASING", "ACTIVE", "INACTIVE"] as const;
 export type ClientStatus = (typeof CLIENT_STATUSES)[number];
 
 export const SAMPLING_STATUSES = ["SCHEDULED", "COMPLETED", "CANCELLED"] as const;
@@ -53,6 +60,7 @@ export const SAMPLING_STATUS_LABELS: Record<SamplingStatus, string> = {
 };
 
 export const CLIENT_STATUS_LABELS: Record<ClientStatus, string> = {
+  CHASING: "Chasing",
   ACTIVE: "Active",
   INACTIVE: "Inactive",
 };

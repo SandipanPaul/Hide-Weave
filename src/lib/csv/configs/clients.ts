@@ -124,7 +124,7 @@ export const CLIENT_IMPORT_CONFIG: ImportConfig = {
       label: "Status",
       aliases: ["active"],
       example: "ACTIVE",
-      hint: "ACTIVE or INACTIVE. Defaults to ACTIVE.",
+      hint: "CHASING, ACTIVE or INACTIVE. Defaults to ACTIVE.",
     },
     {
       key: "fixedMonthly",

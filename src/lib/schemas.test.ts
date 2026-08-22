@@ -254,3 +254,19 @@ describe("projectInputSchema — the exporter split", () => {
     expect(parse([]).success).toBe(true);
   });
 });
+
+describe("client status", () => {
+  it("accepts the three states a client can be in", () => {
+    for (const status of ["CHASING", "ACTIVE", "INACTIVE"]) {
+      expect(clientInputSchema.safeParse(formLike({ status })).success, status).toBe(true);
+    }
+  });
+
+  it("still defaults to ACTIVE when the column is blank", () => {
+    expect(clientInputSchema.parse(formLike({ status: null })).status).toBe("ACTIVE");
+  });
+
+  it("refuses a status the app does not know", () => {
+    expect(clientInputSchema.safeParse(formLike({ status: "PENDING" })).success).toBe(false);
+  });
+});

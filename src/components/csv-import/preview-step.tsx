@@ -218,7 +218,7 @@ export function PreviewStep({
     // min-w-0 on both: the dialog is a CSS grid, whose items default to
     // min-width:auto. Without this the wide table stretches the grid column
     // past the dialog and drags the footer buttons off-screen with it.
-    <div className="min-w-0 space-y-3">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
       {needsAttention.length > 0 ? (
         <div className="flex flex-wrap items-center gap-3">
           <Button
@@ -236,7 +236,14 @@ export function PreviewStep({
           </p>
         </div>
       ) : null}
-      <div className="max-h-[38vh] min-w-0 overflow-auto rounded-lg border">
+      {/*
+        One scrolling region for the table and the row editor together, rather
+        than a fixed slice of the viewport for the table and nothing for the
+        editor. With an editor open the old layout overflowed the dialog and
+        there was nothing to scroll.
+      */}
+      <div className="min-h-0 min-w-0 flex-1 space-y-3 overflow-y-auto pr-1">
+      <div className="min-w-0 overflow-x-auto rounded-lg border">
         <Table>
           <TableHeader className="sticky top-0 bg-background">
             <TableRow>
@@ -382,6 +389,7 @@ export function PreviewStep({
           onClose={() => onToggleEdit(null)}
         />
       ) : null}
+      </div>
     </div>
   );
 }

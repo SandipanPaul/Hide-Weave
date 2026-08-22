@@ -18,11 +18,11 @@ function label(labels: Record<string, string>, status: string): string {
 }
 
 export function ClientStatusBadge({ status }: { status: string }) {
-  return (
-    <Badge variant={status === "ACTIVE" ? "secondary" : "outline"}>
-      {label(CLIENT_STATUS_LABELS, status)}
-    </Badge>
-  );
+  // Someone being chased reads as in-progress rather than settled, so it gets
+  // its own look instead of sharing "inactive"'s muted outline.
+  const variant =
+    status === "ACTIVE" ? "secondary" : status === "CHASING" ? "default" : "outline";
+  return <Badge variant={variant}>{label(CLIENT_STATUS_LABELS, status)}</Badge>;
 }
 
 export function ProjectStatusBadge({ status }: { status: string }) {
