@@ -1,3 +1,4 @@
+import "dotenv/config";
 import Database from "better-sqlite3";
 import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
 import { basename, join, resolve } from "node:path";

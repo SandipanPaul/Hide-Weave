@@ -248,15 +248,38 @@ never the live network.
 ## Deploying to a small VPS
 
 ```bash
-git clone https://github.com/SandipanPaul/Hide-Weave.git /srv/hide-weave
-cd /srv/hide-weave
+sudo dnf install -y git        # or: sudo apt install -y git
+git clone https://github.com/SandipanPaul/Hide-Weave.git ~/hide-weave
+cd ~/hide-weave
 bash scripts/deploy.sh your-hostname
 ```
 
-That installs Caddy, writes `.env` (generating `SESSION_SECRET` and prompting
-for the password), installs dependencies, creates an empty database, builds,
-registers a systemd service, gets an HTTPS certificate, and opens ports 80 and
-443. It is safe to run again — it never overwrites an existing `.env`.
+Works on **Oracle Linux / RHEL** (dnf, firewalld, SELinux) and **Debian /
+Ubuntu** (apt, ufw); it detects which and does the right thing. It installs
+Node and Caddy if missing, writes `.env` (generating `SESSION_SECRET` and
+prompting for the password), installs dependencies, creates an empty database,
+builds, registers a systemd service, gets an HTTPS certificate, and opens the
+firewall. Safe to run again — it never overwrites an existing `.env`.
+
+### Sharing a server with something else
+
+The script **refuses to start** if anything other than Caddy is already
+serving on 80 or 443, and prints what it found. Quietly taking those ports
+would take the other site down.
+
+To put this app behind an nginx or Apache that is already there, add a block
+pointing at `127.0.0.1:3000` yourself, then run with `SKIP_PROXY=1` to do
+everything except the web server:
+
+```bash
+SKIP_PROXY=1 bash scripts/deploy.sh your-hostname
+```
+
+If Caddy is already running and has a `conf.d`, the script adds a site file
+rather than rewriting the config in use.
+
+On SELinux systems it sets `httpd_can_network_connect`, without which the
+proxy is refused its own outbound connection to the app.
 
 ### You need a hostname, not an IP
 
