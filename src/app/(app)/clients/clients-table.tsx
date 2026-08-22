@@ -61,8 +61,9 @@ export function ClientsTable({
           <TableBody>
             {rows.map((row) => (
               <TableRow key={row.id}>
-                <TableCell className="font-medium">
+                <TableCell className="max-w-[26ch] truncate font-medium">
                   <Link
+                    title={row.name}
                     href={`/clients/${row.id}`}
                     className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
