@@ -231,10 +231,39 @@ export type ExporterInput = z.infer<typeof exporterInputSchema>;
 
 // --------------------------------------------------------------- Project
 
+/**
+ * Which exporters are making an order, and how much each is making.
+ *
+ * Rows with no exporter chosen are dropped rather than rejected: the form
+ * always shows one empty row to type into, and an untouched one is not an
+ * error. A row with an exporter but no quantity is an error — that is someone
+ * who started and did not finish.
+ */
+const exporterSplitSchema = z.preprocess(
+  (value) => {
+    if (!Array.isArray(value)) return [];
+    return value.filter((row) => {
+      if (!row || typeof row !== "object") return false;
+      const { exporterId, quantity } = row as Record<string, unknown>;
+      const blankQuantity = quantity === "" || quantity === null || quantity === undefined;
+      return !(String(exporterId ?? "") === "" && blankQuantity);
+    });
+  },
+  z.array(
+    z.object({
+      exporterId: z.string().min(1, "Choose an exporter, or clear the quantity."),
+      quantity: z.coerce
+        .number({ error: "Quantity must be a number." })
+        .int("Quantity must be a whole number.")
+        .positive("Quantity must be greater than zero."),
+    }),
+  ),
+);
+
 export const projectInputSchema = z
   .object({
     clientId: z.string().min(1, "A client is required."),
-    exporterId: optionalText,
+    exporters: exporterSplitSchema,
     product: z.string().trim().min(1, "Product is required.").max(200),
     orderId: z.string().trim().min(1, "Order ID is required.").max(100),
     quantity: z.coerce
@@ -254,12 +283,39 @@ export const projectInputSchema = z
     actualDelivery: optionalDateString,
     notes: optionalText,
   })
+  .superRefine((data, ctx) => {
+    // The split is checked here rather than on the field, because it only
+    // means anything against the project's own quantity.
+    const seen = new Set<string>();
+    for (const [index, allocation] of data.exporters.entries()) {
+      if (seen.has(allocation.exporterId)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["exporters", index, "exporterId"],
+          message: "This exporter is already on the order. Change their quantity instead.",
+        });
+      }
+      seen.add(allocation.exporterId);
+    }
+
+    const allocated = data.exporters.reduce((total, item) => total + item.quantity, 0);
+    if (allocated > data.quantity) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["exporters"],
+        message: `The split adds up to ${allocated.toLocaleString("en-IN")}, which is more than the order's ${data.quantity.toLocaleString("en-IN")}.`,
+      });
+    }
+  })
   .transform((data, ctx) => ({
     ...data,
     orderValue: parseMoneyField(data.orderValue, data.currency, ctx, "orderValue") ?? 0n,
   }));
 
 export type ProjectInput = z.infer<typeof projectInputSchema>;
+
+/** How much of an order one exporter is making. */
+export type ExporterSplit = z.infer<typeof exporterSplitSchema>[number];
 
 // --------------------------------------------------------------- Payment
 

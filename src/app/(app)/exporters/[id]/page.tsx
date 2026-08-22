@@ -50,7 +50,7 @@ export default async function ExporterDetailPage({
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:items-start">
         <ExporterDetailsPanel exporter={detail} />
-        <ExporterProjects projects={exporter.projects} totals={exporter.totals} />
+        <ExporterProjects projects={exporter.projects} />
       </div>
     </>
   );

@@ -47,11 +47,11 @@ export function projectCsvColumnFor(field: string): string {
 export function projectRowInput(
   mapped: MappedRow,
   clientId: string | undefined,
-  exporterId: string | undefined,
+  exporters: Array<{ exporterId: string; quantity: number }>,
 ) {
   return {
     clientId: clientId ?? "",
-    exporterId: exporterId ?? "",
+    exporters,
     product: mapped.product ?? "",
     orderId: mapped.orderId ?? "",
     // Required numbers are passed as "" so the schema reports its own message
@@ -71,9 +71,33 @@ export function projectRowInput(
 
 export type ResolvedReferences = {
   clientId?: string;
-  exporterId?: string;
+  exporters: Array<{ exporterId: string; quantity: number }>;
   issues: RowIssue[];
 };
+
+/**
+ * One exporter's entry in the Exporter column: a name, optionally followed by
+ * how much of the order they are making.
+ *
+ *   Konkan Marine Exports              the whole order
+ *   Konkan Marine: 2000; Gujarat: 3000 a split
+ *
+ * Semicolons and newlines separate entries. Commas do not — company names are
+ * full of them ("Kutch Salt & Minerals, Bhuj").
+ */
+function splitExporterCell(raw: string): Array<{ name: string; quantity?: string }> {
+  return raw
+    .split(/[;\r\n]+/)
+    .map((part) => part.trim())
+    .filter((part) => part !== "")
+    .map((part) => {
+      // Split on the last colon, so "Acme Ltd: 500" works and a name
+      // containing a colon still resolves.
+      const at = part.lastIndexOf(":");
+      if (at === -1) return { name: part };
+      return { name: part.slice(0, at).trim(), quantity: part.slice(at + 1).trim() };
+    });
+}
 
 /**
  * Turns the names in a row into ids. A name that matches nothing is an error
@@ -86,7 +110,6 @@ export function resolveReferences(
 ): ResolvedReferences {
   const issues: RowIssue[] = [];
   let clientId: string | undefined;
-  let exporterId: string | undefined;
 
   const clientName = mapped.clientName;
   if (clientName) {
@@ -95,24 +118,52 @@ export function resolveReferences(
     else {
       issues.push({
         field: "clientName",
-        message: `No client called “${clientName}”. Add them on the Clients tab first, or correct the spelling.`,
+        message: `No client called \u201C${clientName}\u201D. Add them on the Clients tab first, or correct the spelling.`,
       });
     }
   }
 
-  const exporterName = mapped.exporterName;
-  if (exporterName) {
-    const match = exporters.get(lookupKey(exporterName));
-    if (match) exporterId = match.id;
-    else {
+  const allocations: Array<{ exporterId: string; quantity: number }> = [];
+  const entries = mapped.exporterName ? splitExporterCell(mapped.exporterName) : [];
+
+  for (const entry of entries) {
+    const match = exporters.get(lookupKey(entry.name));
+    if (!match) {
       issues.push({
         field: "exporterName",
-        message: `No exporter called “${exporterName}”. Leave the column blank to import without one.`,
+        message: `No exporter called \u201C${entry.name}\u201D. Leave the column blank to import without one.`,
       });
+      continue;
     }
+
+    let quantity: number;
+    if (entry.quantity === undefined) {
+      // A bare name means they are making all of it — which only makes sense
+      // when they are the only one named.
+      if (entries.length > 1) {
+        issues.push({
+          field: "exporterName",
+          message: `Give ${entry.name} a quantity, e.g. \u201C${entry.name}: 2000\u201D — the order is split between several exporters.`,
+        });
+        continue;
+      }
+      quantity = Number(mapped.quantity ?? 0);
+    } else {
+      quantity = Number(entry.quantity.replace(/[,\s]/g, ""));
+    }
+
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      issues.push({
+        field: "exporterName",
+        message: `\u201C${entry.quantity ?? ""}\u201D is not a quantity for ${entry.name}.`,
+      });
+      continue;
+    }
+
+    allocations.push({ exporterId: match.id, quantity });
   }
 
-  return { clientId, exporterId, issues };
+  return { clientId, exporters: allocations, issues };
 }
 
 const FIELDS: ImportConfig["fields"] = [
@@ -191,7 +242,7 @@ const FIELDS: ImportConfig["fields"] = [
     label: "Exporter",
     aliases: ["exporter", "supplier", "suppliername", "vendor", "source"],
     example: "Konkan Marine Exports",
-    hint: "Optional. Must match an exporter already on file.",
+    hint: "Optional. A name, or a split: \u201CAcme: 2000; Best Ltd: 3000\u201D.",
   },
   {
     key: "status",
@@ -250,7 +301,7 @@ export function buildProjectImportConfig(
       errors.push(...references.issues);
 
       const parsed = projectInputSchema.safeParse(
-        projectRowInput(mapped, references.clientId, references.exporterId),
+        projectRowInput(mapped, references.clientId, references.exporters),
       );
 
       if (!parsed.success) {

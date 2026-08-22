@@ -113,10 +113,37 @@ model Exporter {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  projects Project[]
+  allocations ProjectExporter[]
 
   @@index([deletedAt])
   @@index([companyName])
+}
+
+/// One exporter's share of one project.
+///
+/// A 5,00,000-piece order might be split 2,00,000 / 2,00,000 / 1,00,000 across
+/// three exporters. The shares may add up to less than the project's total
+/// quantity — work that has not been placed yet — but never to more.
+model ProjectExporter {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  exporterId String
+  exporter   Exporter @relation(fields: [exporterId], references: [id], onDelete: Cascade)
+
+  /// Pieces (or whatever the project's unit is) this exporter is making.
+  quantity Int
+  /// Order within the project, so the split reads the way it was entered.
+  position Int @default(0)
+
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([projectId])
+  @@index([exporterId])
+  @@index([deletedAt])
 }
 
 model Project {
@@ -124,8 +151,9 @@ model Project {
   clientId String
   client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-  exporterId String?
-  exporter   Exporter? @relation(fields: [exporterId], references: [id], onDelete: SetNull)
+  /// Which exporters are making this order, and how much each is making.
+  /// A project may be split across several — see ProjectExporter.
+  exporters ProjectExporter[]
 
   product  String
   orderId  String
@@ -153,7 +181,6 @@ model Project {
   payments Payment[]
 
   @@index([clientId])
-  @@index([exporterId])
   @@index([deletedAt])
   @@index([orderId])
   @@index([status])

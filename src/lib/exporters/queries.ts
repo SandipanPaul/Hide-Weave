@@ -1,5 +1,4 @@
 import { notDeleted, prisma } from "@/lib/db";
-import { computeCommission } from "@/lib/money";
 import { paginate, PAGE_SIZE, type ListParams, type Pagination } from "@/lib/list-params";
 import { foldCase, matchByKey } from "@/lib/keys";
 import { websiteKey } from "@/lib/url";
@@ -52,7 +51,7 @@ const LIST_SELECT = {
   email: true,
   phone: true,
   website: true,
-  _count: { select: { projects: { where: notDeleted } } },
+  _count: { select: { allocations: { where: notDeleted } } },
 } as const;
 
 type ListRecord = {
@@ -62,12 +61,12 @@ type ListRecord = {
   email: string | null;
   phone: string | null;
   website: string | null;
-  _count: { projects: number };
+  _count: { allocations: number };
 };
 
 function toRow(exporter: ListRecord): ExporterListRow {
   const { _count, ...fields } = exporter;
-  return { ...fields, projectCount: _count.projects };
+  return { ...fields, projectCount: _count.allocations };
 }
 
 export async function getExportersPage(
@@ -114,35 +113,46 @@ export async function getExporter(id: string) {
   const exporter = await prisma.exporter.findFirst({
     where: { id, ...notDeleted },
     include: {
-      projects: {
-        where: notDeleted,
-        orderBy: { orderDate: "desc" },
-        include: { client: { select: { id: true, name: true } } },
+      allocations: {
+        where: { ...notDeleted, project: notDeleted },
+        orderBy: { project: { orderDate: "desc" } },
+        select: {
+          quantity: true,
+          project: {
+            select: {
+              id: true,
+              orderId: true,
+              product: true,
+              quantity: true,
+              unit: true,
+              status: true,
+              orderDate: true,
+              client: { select: { id: true, name: true } },
+            },
+          },
+        },
       },
     },
   });
   if (!exporter) return null;
 
-  // Segmented by currency and never summed across them — this app converts
-  // nothing. Cancelled orders routed no goods, so they are excluded.
-  const totals = new Map<string, { orderValue: bigint; commission: bigint; projects: number }>();
-  for (const project of exporter.projects) {
-    if (project.status === "CANCELLED") continue;
-    const entry = totals.get(project.currency) ?? {
-      orderValue: 0n,
-      commission: 0n,
-      projects: 0,
-    };
-    entry.orderValue += project.orderValue;
-    entry.commission += computeCommission(project.orderValue, project.commissionPercentage);
-    entry.projects += 1;
-    totals.set(project.currency, entry);
-  }
+  // What they are making, not what it is worth: money belongs to the order,
+  // and lives on the project's own page.
+  const projects = exporter.allocations.map(({ project, quantity }) => ({
+    id: project.id,
+    orderId: project.orderId,
+    product: project.product,
+    client: project.client,
+    status: project.status,
+    orderDate: project.orderDate,
+    /** This exporter's share of the order. */
+    quantity,
+    /** The whole order, for context when it is shared. */
+    projectQuantity: project.quantity,
+    unit: project.unit,
+  }));
 
-  return {
-    ...exporter,
-    totals: [...totals.entries()].map(([currency, value]) => ({ currency, ...value })),
-  };
+  return { ...exporter, projects };
 }
 
 /**

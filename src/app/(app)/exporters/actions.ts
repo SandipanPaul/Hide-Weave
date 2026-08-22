@@ -110,13 +110,19 @@ export async function updateExporter(
 export async function deleteExporter(id: string): Promise<ActionResult> {
   const exporter = await prisma.exporter.findFirst({
     where: { id, ...notDeleted },
-    select: { id: true, _count: { select: { projects: { where: notDeleted } } } },
+    select: { id: true, _count: { select: { allocations: { where: notDeleted } } } },
   });
   if (!exporter) return failure("This exporter no longer exists.");
 
+  // The orders themselves are kept and simply lose this maker; their
+  // quantities stay as they were, so the split shows as partly unassigned.
+  const deletedAt = new Date();
   await prisma.$transaction([
-    prisma.project.updateMany({ where: { exporterId: id, ...notDeleted }, data: { exporterId: null } }),
-    prisma.exporter.update({ where: { id }, data: { deletedAt: new Date() } }),
+    prisma.projectExporter.updateMany({
+      where: { exporterId: id, ...notDeleted },
+      data: { deletedAt },
+    }),
+    prisma.exporter.update({ where: { id }, data: { deletedAt } }),
   ]);
 
   revalidateExporters();

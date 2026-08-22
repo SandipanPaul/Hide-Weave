@@ -12,35 +12,29 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDateOnly } from "@/lib/dates";
-import { formatMoney, formatMoneyPlain } from "@/lib/money";
 
 type ProjectRow = {
   id: string;
   orderId: string;
   product: string;
-  orderValue: bigint;
-  currency: string;
+  /** This exporter's share of the order. */
+  quantity: number;
+  /** The whole order, for context. */
+  projectQuantity: number;
+  unit: string;
   status: string;
   orderDate: Date;
   client: { id: string; name: string };
 };
 
-type Total = { currency: string; orderValue: bigint; commission: bigint; projects: number };
-
 /**
- * The orders sourced through this exporter.
+ * The orders this exporter is making.
  *
- * Order value leads here, unlike everywhere else: this answers "how much
- * supply have I routed to them", which is a different question from what the
- * agent earned. The commission is shown too, but second.
+ * Deliberately no money: what matters about a supplier is what they are
+ * producing and whether it is on time. Value and commission belong to the
+ * order, and are on the project's own page.
  */
-export function ExporterProjects({
-  projects,
-  totals,
-}: {
-  projects: ProjectRow[];
-  totals: Total[];
-}) {
+export function ExporterProjects({ projects }: { projects: ProjectRow[] }) {
   return (
     <Card>
       <CardHeader>
@@ -63,7 +57,7 @@ export function ExporterProjects({
                     <TableHead>Order ID</TableHead>
                     <TableHead>Client</TableHead>
                     <TableHead>Product</TableHead>
-                    <TableHead className="text-right">Order value</TableHead>
+                    <TableHead className="text-right">Making</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Ordered</TableHead>
                   </TableRow>
@@ -89,10 +83,14 @@ export function ExporterProjects({
                       </TableCell>
                       <TableCell className="max-w-[18ch] truncate">{project.product}</TableCell>
                       <TableCell className="whitespace-nowrap text-right tabular-nums">
-                        <span className="mr-1 text-xs text-muted-foreground">
-                          {project.currency}
-                        </span>
-                        {formatMoneyPlain(project.orderValue, project.currency)}
+                        {project.quantity.toLocaleString("en-IN")}
+                        <span className="ml-1 text-xs text-muted-foreground">{project.unit}</span>
+                        {/* Somebody else is making the rest of this order. */}
+                        {project.quantity < project.projectQuantity ? (
+                          <span className="ml-1.5 text-xs text-muted-foreground">
+                            of {project.projectQuantity.toLocaleString("en-IN")}
+                          </span>
+                        ) : null}
                       </TableCell>
                       <TableCell>
                         <ProjectStatusBadge status={project.status} />
@@ -106,29 +104,6 @@ export function ExporterProjects({
               </Table>
             </div>
 
-            {totals.length > 0 ? (
-              <div className="space-y-1 border-t pt-3">
-                {totals.map((total) => (
-                  <div key={total.currency} className="flex flex-wrap justify-end gap-6 text-sm">
-                    <span className="text-muted-foreground">
-                      Value routed ({total.currency})
-                      <span className="ml-2 font-medium tabular-nums text-foreground">
-                        {formatMoney(total.orderValue, total.currency)}
-                      </span>
-                    </span>
-                    <span className="text-muted-foreground">
-                      Commission earned
-                      <span className="ml-2 font-medium tabular-nums text-foreground">
-                        {formatMoney(total.commission, total.currency)}
-                      </span>
-                    </span>
-                  </div>
-                ))}
-                <p className="pt-1 text-right text-xs text-muted-foreground">
-                  Excludes cancelled orders. Currencies are never converted or combined.
-                </p>
-              </div>
-            ) : null}
           </>
         )}
       </CardContent>

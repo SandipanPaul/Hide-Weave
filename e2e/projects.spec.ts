@@ -33,7 +33,7 @@ test.describe("projects", () => {
 
     await dialog.getByLabel("Product").fill("Basmati rice");
     await dialog.getByLabel("Order ID").fill(orderId);
-    await dialog.getByLabel("Quantity").fill("1000");
+    await dialog.getByLabel(/^Quantity/).fill("1000");
     await dialog.getByLabel("Order value").fill(ORDER_VALUE);
     await dialog.getByLabel("Commission %").fill("2.5");
     await dialog.getByLabel("Order date").fill("2026-08-01");
@@ -118,6 +118,95 @@ test.describe("projects", () => {
     await expect(page.getByRole("button", { name: /^Edit payment of/ })).toHaveCount(1);
   });
 
+  test("splits one order across three exporters", async ({ page }) => {
+    const client = await addClientNamed(page, uniqueName("E2E Split Client"));
+    const makers = ["E2E Maker One", "E2E Maker Two", "E2E Maker Three"];
+    for (const name of makers) {
+      await page.goto("/exporters");
+      await page.getByRole("button", { name: "Add exporter" }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByLabel(/^Company name/).fill(name);
+      await dialog.getByRole("button", { name: "Add exporter" }).click();
+      await dialog.waitFor({ state: "hidden" });
+    }
+
+    const orderId = uniqueOrderId();
+    await page.goto("/projects");
+    await page.getByRole("button", { name: "Add project" }).click();
+    const dialog = page.getByRole("dialog");
+
+    await dialog.getByLabel("Client").click();
+    await page.getByRole("option", { name: client }).click();
+    await dialog.getByLabel("Product").fill("Leather wallets");
+    await dialog.getByLabel("Order ID").fill(orderId);
+    // 5,00,000 pieces split 2 / 2 / 1 lakh.
+    await dialog.getByLabel(/^Quantity/).fill("500000");
+    await dialog.getByLabel("Order value").fill("2500000");
+    await dialog.getByLabel("Commission %").fill("2");
+
+    await dialog.getByRole("combobox", { name: "Exporter", exact: true }).click();
+    await page.getByRole("option", { name: makers[0] }).click();
+    await dialog.getByLabel("Share", { exact: true }).fill("200000");
+
+    await dialog.getByRole("button", { name: "Add another exporter" }).click();
+    await dialog.getByRole("combobox", { name: "Exporter 2" }).click();
+    await page.getByRole("option", { name: makers[1] }).click();
+    await dialog.getByLabel("Share 2").fill("200000");
+
+    await dialog.getByRole("button", { name: "Add another exporter" }).click();
+    await dialog.getByRole("combobox", { name: "Exporter 3" }).click();
+    await page.getByRole("option", { name: makers[2] }).click();
+    await dialog.getByLabel("Share 3").fill("100000");
+
+    // The running total says the split is complete before saving.
+    await expect(dialog.getByText("All 5,00,000 pcs assigned")).toBeVisible();
+    await dialog.getByRole("button", { name: "Add project" }).click();
+    await dialog.waitFor({ state: "hidden" });
+
+    // The detail page lists all three with their quantities.
+    await openProject(page, orderId);
+    for (const [name, qty] of [
+      [makers[0], "2,00,000"],
+      [makers[1], "2,00,000"],
+      [makers[2], "1,00,000"],
+    ] as const) {
+      await expect(page.getByRole("listitem").filter({ hasText: name })).toContainText(qty);
+    }
+
+    // Each exporter's page shows their share of the value, not the whole order.
+    await page.getByRole("link", { name: makers[2] }).click();
+    await expect(page.getByRole("row").filter({ hasText: orderId })).toContainText("5,00,000.00");
+  });
+
+  test("refuses a split that adds up to more than the order", async ({ page }) => {
+    const client = await addClientNamed(page, uniqueName("E2E Over Client"));
+    await page.goto("/exporters");
+    await page.getByRole("button", { name: "Add exporter" }).click();
+    let dialog = page.getByRole("dialog");
+    await dialog.getByLabel(/^Company name/).fill("E2E Over Maker");
+    await dialog.getByRole("button", { name: "Add exporter" }).click();
+    await dialog.waitFor({ state: "hidden" });
+
+    await page.goto("/projects");
+    await page.getByRole("button", { name: "Add project" }).click();
+    dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Client").click();
+    await page.getByRole("option", { name: client }).click();
+    await dialog.getByLabel("Product").fill("Belts");
+    await dialog.getByLabel("Order ID").fill(uniqueOrderId());
+    await dialog.getByLabel(/^Quantity/).fill("1000");
+    await dialog.getByLabel("Order value").fill("50000");
+    await dialog.getByLabel("Commission %").fill("2");
+    await dialog.getByRole("combobox", { name: "Exporter", exact: true }).click();
+    await page.getByRole("option", { name: "E2E Over Maker" }).click();
+    await dialog.getByLabel("Share", { exact: true }).fill("1500");
+
+    // Flagged while typing, before anything is submitted.
+    await expect(dialog.getByText("500 pcs over the order's 1,000")).toBeVisible();
+    await dialog.getByRole("button", { name: "Add project" }).click();
+    await expect(dialog.getByText(/more than the order's/)).toBeVisible();
+  });
+
   test("refuses a second project with the same order ID", async ({ page }) => {
     const client = await addClientNamed(page, uniqueName("E2E Dup Client"));
     const orderId = await addProject(page, client);
@@ -130,7 +219,7 @@ test.describe("projects", () => {
     await page.getByRole("option", { name: client }).click();
     await dialog.getByLabel("Product").fill("Basmati rice");
     await dialog.getByLabel("Order ID").fill(orderId);
-    await dialog.getByLabel("Quantity").fill("10");
+    await dialog.getByLabel(/^Quantity/).fill("10");
     await dialog.getByLabel("Order value").fill("1000");
     await dialog.getByLabel("Commission %").fill("1");
     await dialog.getByRole("button", { name: "Add project" }).click();

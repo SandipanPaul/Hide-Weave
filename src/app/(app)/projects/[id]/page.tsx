@@ -46,8 +46,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     id: project.id,
     clientId: project.clientId,
     clientName: project.client.name,
-    exporterId: project.exporterId ?? "",
-    exporterName: project.exporter?.companyName ?? null,
+    exporters: project.exporters.map((allocation) => ({
+      exporterId: allocation.exporter.id,
+      quantity: String(allocation.quantity),
+    })),
+    exporterNames: project.exporters.map((allocation) => ({
+      id: allocation.exporter.id,
+      name: allocation.exporter.companyName,
+      quantity: allocation.quantity,
+    })),
     product: project.product,
     orderId: project.orderId,
     quantity: String(project.quantity),

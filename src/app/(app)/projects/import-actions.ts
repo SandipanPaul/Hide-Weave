@@ -121,7 +121,7 @@ export async function importProjects(
     }
 
     const parsed = projectInputSchema.safeParse(
-      projectRowInput(row.mapped, references.clientId, references.exporterId),
+      projectRowInput(row.mapped, references.clientId, references.exporters),
     );
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
@@ -132,10 +132,10 @@ export async function importProjects(
       );
     }
 
-    const { orderDate, expectedDelivery, actualDelivery, exporterId, ...rest } = parsed.data;
+    const { orderDate, expectedDelivery, actualDelivery, exporters, ...rest } = parsed.data;
+    const allocations = exporters.map((allocation, position) => ({ ...allocation, position }));
     const data = {
       ...rest,
-      exporterId: exporterId || null,
       orderDate: dateOnlyToUtc(orderDate),
       expectedDelivery: expectedDelivery ? dateOnlyToUtc(expectedDelivery) : null,
       actualDelivery: actualDelivery ? dateOnlyToUtc(actualDelivery) : null,
@@ -153,11 +153,16 @@ export async function importProjects(
           "the matching project no longer exists — re-run the import.",
         );
       }
-      await tx.project.update({ where: { id: target.id }, data });
+      // The split is replaced wholesale, as it is on the edit form.
+      await tx.projectExporter.deleteMany({ where: { projectId: target.id } });
+      await tx.project.update({
+        where: { id: target.id },
+        data: { ...data, exporters: { create: allocations } },
+      });
       return { outcome: "updated" };
     }
 
-    await tx.project.create({ data });
+    await tx.project.create({ data: { ...data, exporters: { create: allocations } } });
     return { outcome: "created" };
   });
 

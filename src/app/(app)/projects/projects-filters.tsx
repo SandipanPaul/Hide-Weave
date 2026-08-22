@@ -53,7 +53,7 @@ export function ProjectsFilters({
   ];
 
   return (
-    <div className="mb-4 flex flex-wrap items-end gap-3">
+    <div className="mb-4 flex flex-wrap items-start gap-3">
       <FilterSelect
         id="filter-client"
         label="Client"
@@ -110,7 +110,7 @@ export function ProjectsFilters({
         <Button
           variant="ghost"
           size="sm"
-          className="text-muted-foreground"
+          className="mt-[1.625rem] text-muted-foreground"
           onClick={() =>
             router.push(buildListHref(PATH, params, { filters: {}, page: 1 }), { scroll: false })
           }

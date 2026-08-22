@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { clientInputSchema, formatZodError, samplingInputSchema } from "./schemas";
+import {
+  clientInputSchema,
+  formatZodError,
+  projectInputSchema,
+  samplingInputSchema,
+} from "./schemas";
 
 /** Mimics what a server action receives: absent fields arrive as null. */
 function formLike(overrides: Record<string, unknown> = {}) {
@@ -170,5 +175,82 @@ describe("samplingInputSchema", () => {
     expect(
       samplingInputSchema.safeParse({ clientId: "a", scheduledDate: "2026-02-31" }).success,
     ).toBe(false);
+  });
+});
+
+describe("projectInputSchema — the exporter split", () => {
+  const base = {
+    clientId: "c1",
+    product: "Basmati rice",
+    orderId: "ORD-1",
+    quantity: "500000",
+    orderValue: "2500000",
+    commissionPercentage: "2.5",
+    orderDate: "2026-08-01",
+  };
+
+  const parse = (exporters: unknown) =>
+    projectInputSchema.safeParse({ ...base, exporters });
+
+  it("accepts a 5,00,000 order split 2 / 2 / 1 lakh across three exporters", () => {
+    const result = parse([
+      { exporterId: "e1", quantity: "200000" },
+      { exporterId: "e2", quantity: "200000" },
+      { exporterId: "e3", quantity: "100000" },
+    ]);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.exporters).toHaveLength(3);
+      expect(result.data.exporters.reduce((n, e) => n + e.quantity, 0)).toBe(500_000);
+    }
+  });
+
+  it("accepts a split that adds up to less than the order", () => {
+    // Work that has not been placed with anyone yet.
+    expect(parse([{ exporterId: "e1", quantity: "200000" }]).success).toBe(true);
+  });
+
+  it("refuses a split that adds up to more than the order", () => {
+    const result = parse([
+      { exporterId: "e1", quantity: "300000" },
+      { exporterId: "e2", quantity: "300000" },
+    ]);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const message = result.error.issues.map((i) => i.message).join(" ");
+      expect(message).toMatch(/6,00,000.*more than.*5,00,000/);
+    }
+  });
+
+  it("refuses the same exporter twice", () => {
+    const result = parse([
+      { exporterId: "e1", quantity: "100000" },
+      { exporterId: "e1", quantity: "100000" },
+    ]);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toMatch(/already on the order/);
+    }
+  });
+
+  it("ignores the empty row the form always renders", () => {
+    const result = parse([{ exporterId: "", quantity: "" }]);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.exporters).toEqual([]);
+  });
+
+  it("refuses a quantity with nobody to make it", () => {
+    // Someone started the row and did not finish it.
+    expect(parse([{ exporterId: "", quantity: "1000" }]).success).toBe(false);
+  });
+
+  it("refuses an exporter with no quantity", () => {
+    expect(parse([{ exporterId: "e1", quantity: "" }]).success).toBe(false);
+    expect(parse([{ exporterId: "e1", quantity: "0" }]).success).toBe(false);
+    expect(parse([{ exporterId: "e1", quantity: "1.5" }]).success).toBe(false);
+  });
+
+  it("accepts an order with no exporters at all", () => {
+    expect(parse([]).success).toBe(true);
   });
 });

@@ -254,7 +254,13 @@ export async function getClientProjects(clientId: string) {
   return prisma.project.findMany({
     where: { clientId, ...notDeleted },
     orderBy: { orderDate: "desc" },
-    include: { exporter: { select: { id: true, companyName: true } } },
+    include: {
+      exporters: {
+        where: notDeleted,
+        orderBy: { position: "asc" },
+        select: { quantity: true, exporter: { select: { id: true, companyName: true } } },
+      },
+    },
   });
 }
 

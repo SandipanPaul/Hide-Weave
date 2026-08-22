@@ -6,7 +6,10 @@ const CLIENTS = [
   { id: "cl-1", name: "Meridian Foods Ltd" },
   { id: "cl-2", name: "Konkan Marine Exports" },
 ];
-const EXPORTERS = [{ id: "ex-1", name: "Gujarat Spice Works" }];
+const EXPORTERS = [
+  { id: "ex-1", name: "Gujarat Spice Works" },
+  { id: "ex-2", name: "Rann Leather Co" },
+];
 
 const config = buildProjectImportConfig(CLIENTS, EXPORTERS);
 
@@ -129,5 +132,70 @@ describe("project header guessing", () => {
       "PO Date": "orderDate",
       Supplier: "exporterName",
     });
+  });
+});
+
+describe("the exporter column", () => {
+  const withExporter = (exporterName: string, quantity = "1000") =>
+    config.validateRow({ ...validRow, quantity, exporterName }, [
+      ...Object.keys(validRow),
+      "exporterName",
+    ]);
+
+  it("gives a lone named exporter the whole order", () => {
+    expect(withExporter("Gujarat Spice Works").errors).toEqual([]);
+  });
+
+  it("reads a split written as name and quantity", () => {
+    // "Acme: 2000; Best Ltd: 3000" is how a split arrives from a spreadsheet.
+    const result = config.validateRow(
+      {
+        ...validRow,
+        quantity: "5000",
+        exporterName: "Gujarat Spice Works: 2000; Rann Leather Co: 3000",
+      },
+      [...Object.keys(validRow), "exporterName"],
+    );
+    expect(result.errors).toEqual([]);
+  });
+
+  it("refuses a split that exceeds the order", () => {
+    const result = config.validateRow(
+      {
+        ...validRow,
+        quantity: "1000",
+        exporterName: "Gujarat Spice Works: 800; Rann Leather Co: 800",
+      },
+      [...Object.keys(validRow), "exporterName"],
+    );
+    expect(result.errors.map((i) => i.message).join(" ")).toMatch(/more than/);
+  });
+
+  it("asks for quantities once more than one exporter is named", () => {
+    const result = config.validateRow(
+      { ...validRow, exporterName: "Gujarat Spice Works; Rann Leather Co" },
+      [...Object.keys(validRow), "exporterName"],
+    );
+    expect(result.errors[0].message).toMatch(/Give .* a quantity/);
+  });
+
+  it("does not split on commas, which company names contain", () => {
+    // "Kutch Salt & Minerals, Bhuj" is one exporter, not two.
+    const result = withExporter("Nobody, Somewhere");
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].message).toContain("Nobody, Somewhere");
+  });
+
+  it("ignores thousands separators in a quantity", () => {
+    const result = config.validateRow(
+      { ...validRow, quantity: "5000", exporterName: "Gujarat Spice Works: 2,500" },
+      [...Object.keys(validRow), "exporterName"],
+    );
+    expect(result.errors).toEqual([]);
+  });
+
+  it("names a quantity it cannot read", () => {
+    const result = withExporter("Gujarat Spice Works: lots");
+    expect(result.errors[0].message).toMatch(/is not a quantity/);
   });
 });

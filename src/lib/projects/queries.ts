@@ -34,9 +34,10 @@ export type ProjectListRow = {
   product: string;
   clientId: string;
   clientName: string;
-  exporterName: string | null;
   quantity: number;
   unit: string;
+  /** Who is making it, and how much each is making. May be empty. */
+  exporters: Array<{ id: string; companyName: string; quantity: number }>;
   orderValue: bigint;
   commissionPercentage: number;
   commission: bigint;
@@ -83,7 +84,8 @@ function searchWhere(q: string) {
       { product: { contains: q } },
       { orderId: { contains: q } },
       { client: { name: { contains: q } } },
-      { exporter: { companyName: { contains: q } } },
+      // Any exporter working on the order, not just the first.
+      { exporters: { some: { ...notDeleted, exporter: { companyName: { contains: q } } } } },
     ],
   };
 }
@@ -101,8 +103,23 @@ const LIST_SELECT = {
   status: true,
   orderDate: true,
   client: { select: { name: true } },
-  exporter: { select: { companyName: true } },
+  exporters: {
+    where: notDeleted,
+    orderBy: { position: "asc" },
+    select: { quantity: true, exporter: { select: { id: true, companyName: true } } },
+  },
 } as const;
+
+/** The split, flattened for rendering. */
+type AllocationRow = { quantity: number; exporter: { id: string; companyName: string } };
+
+function toExporters(allocations: AllocationRow[]) {
+  return allocations.map((allocation) => ({
+    id: allocation.exporter.id,
+    companyName: allocation.exporter.companyName,
+    quantity: allocation.quantity,
+  }));
+}
 
 /** Commission is computed, never stored, so sorting by it happens in JS. */
 const COMPUTED_SORTS = new Set<string>(["commission", "client"]);
@@ -120,7 +137,7 @@ function toRow(project: {
   status: string;
   orderDate: Date;
   client: { name: string };
-  exporter: { companyName: string } | null;
+  exporters: AllocationRow[];
 }): ProjectListRow {
   return {
     id: project.id,
@@ -128,7 +145,7 @@ function toRow(project: {
     product: project.product,
     clientId: project.clientId,
     clientName: project.client.name,
-    exporterName: project.exporter?.companyName ?? null,
+    exporters: toExporters(project.exporters),
     quantity: project.quantity,
     unit: project.unit,
     orderValue: project.orderValue,
@@ -231,7 +248,15 @@ export async function getProject(id: string) {
     where: { id, ...notDeleted },
     include: {
       client: { select: { id: true, name: true, currency: true } },
-      exporter: { select: { id: true, companyName: true } },
+      exporters: {
+        where: notDeleted,
+        orderBy: { position: "asc" },
+        select: {
+          id: true,
+          quantity: true,
+          exporter: { select: { id: true, companyName: true } },
+        },
+      },
       payments: { where: notDeleted, orderBy: { paidOn: "asc" } },
     },
   });

@@ -25,7 +25,7 @@ type ProjectRow = {
   currency: string;
   status: string;
   orderDate: Date;
-  exporter: { id: string; companyName: string } | null;
+  exporters: Array<{ quantity: number; exporter: { id: string; companyName: string } }>;
 };
 
 /**
@@ -104,8 +104,10 @@ export function ClientProjects({ projects }: { projects: ProjectRow[] }) {
                       </Link>
                     </TableCell>
                     <TableCell>{project.product}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {project.exporter?.companyName ?? "—"}
+                    <TableCell className="max-w-[18ch] truncate text-muted-foreground">
+                      {project.exporters.length === 0
+                        ? "—"
+                        : project.exporters.map((a) => a.exporter.companyName).join(", ")}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatMoney(project.orderValue, project.currency)}

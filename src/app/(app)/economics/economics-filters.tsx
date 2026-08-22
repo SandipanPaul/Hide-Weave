@@ -43,7 +43,7 @@ export function EconomicsFilters({
   };
 
   return (
-    <div className="mb-6 flex flex-wrap items-end gap-3">
+    <div className="mb-6 flex flex-wrap items-start gap-3">
       <div className="space-y-1.5">
         <Label htmlFor="range-from">From</Label>
         <Input
@@ -93,7 +93,7 @@ export function EconomicsFilters({
         <Button
           variant="ghost"
           size="sm"
-          className="text-muted-foreground"
+          className="mt-[1.625rem] text-muted-foreground"
           onClick={() => router.push("/economics", { scroll: false })}
         >
           <RotateCcw className="size-4" aria-hidden />

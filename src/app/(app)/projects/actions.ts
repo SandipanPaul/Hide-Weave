@@ -27,9 +27,17 @@ function revalidateProject(id?: string, clientId?: string) {
 }
 
 function projectFormValues(formData: FormData) {
+  // Parallel fields, one pair per row of the split, read positionally: the
+  // form renders an exporter picker and a quantity box side by side.
+  const exporterIds = formData.getAll("exporterId");
+  const quantities = formData.getAll("exporterQuantity");
+
   return {
     clientId: formData.get("clientId"),
-    exporterId: formData.get("exporterId"),
+    exporters: exporterIds.map((exporterId, index) => ({
+      exporterId: String(exporterId ?? ""),
+      quantity: quantities[index] ?? "",
+    })),
     product: formData.get("product"),
     orderId: formData.get("orderId"),
     quantity: formData.get("quantity"),
@@ -46,12 +54,12 @@ function projectFormValues(formData: FormData) {
 }
 
 /**
- * Checks the two references a project carries. An id that doesn't resolve is
+ * Checks the records a project points at. An id that doesn't resolve is
  * reported against its own field rather than surfacing as a foreign-key error.
  */
 async function checkReferences(
   clientId: string,
-  exporterId: string | undefined,
+  exporters: ReadonlyArray<{ exporterId: string }>,
 ): Promise<ActionResult<never> | null> {
   const client = await prisma.client.findFirst({
     where: { id: clientId, ...notDeleted },
@@ -59,23 +67,31 @@ async function checkReferences(
   });
   if (!client) return failure("Choose a client that still exists.", "clientId");
 
-  if (exporterId) {
-    const exporter = await prisma.exporter.findFirst({
-      where: { id: exporterId, ...notDeleted },
+  const ids = exporters.map((allocation) => allocation.exporterId);
+  if (ids.length > 0) {
+    const found = await prisma.exporter.findMany({
+      where: { id: { in: ids }, ...notDeleted },
       select: { id: true },
     });
-    if (!exporter) return failure("Choose an exporter that still exists.", "exporterId");
+    if (found.length !== new Set(ids).size) {
+      return failure("One of those exporters no longer exists.", "exporters");
+    }
   }
   return null;
 }
 
+/** Nested-create rows for a project's split, numbered in the given order. */
+function allocationRows(exporters: ReadonlyArray<{ exporterId: string; quantity: number }>) {
+  return exporters.map((allocation, position) => ({ ...allocation, position }));
+}
+
 /** The shape both create and update write, once dates are real Dates. */
 function projectData(input: z.infer<typeof projectInputSchema>) {
-  const { orderDate, expectedDelivery, actualDelivery, exporterId, ...rest } = input;
+  const { orderDate, expectedDelivery, actualDelivery, ...rest } = input;
+  const { exporters, ...columns } = rest;
+  void exporters;
   return {
-    ...rest,
-    // An empty select means "no exporter", which is null in the database.
-    exporterId: exporterId || null,
+    ...columns,
     orderDate: dateOnlyToUtc(orderDate),
     expectedDelivery: expectedDelivery ? dateOnlyToUtc(expectedDelivery) : null,
     actualDelivery: actualDelivery ? dateOnlyToUtc(actualDelivery) : null,
@@ -89,7 +105,7 @@ export async function createProject(
   const parsed = projectInputSchema.safeParse(projectFormValues(formData));
   if (!parsed.success) return invalid(parsed.error);
 
-  const badReference = await checkReferences(parsed.data.clientId, parsed.data.exporterId);
+  const badReference = await checkReferences(parsed.data.clientId, parsed.data.exporters);
   if (badReference) return badReference;
 
   if (await findOrderIdConflict(parsed.data.orderId)) {
@@ -97,7 +113,12 @@ export async function createProject(
   }
 
   try {
-    const project = await prisma.project.create({ data: projectData(parsed.data) });
+    const project = await prisma.project.create({
+      data: {
+        ...projectData(parsed.data),
+        exporters: { create: allocationRows(parsed.data.exporters) },
+      },
+    });
     revalidateProject(project.id, parsed.data.clientId);
     return { ok: true, data: { id: project.id } };
   } catch {
@@ -119,7 +140,7 @@ export async function updateProject(
   });
   if (!existing) return failure("This project no longer exists.");
 
-  const badReference = await checkReferences(parsed.data.clientId, parsed.data.exporterId);
+  const badReference = await checkReferences(parsed.data.clientId, parsed.data.exporters);
   if (badReference) return badReference;
 
   if (await findOrderIdConflict(parsed.data.orderId, id)) {
@@ -141,7 +162,18 @@ export async function updateProject(
   }
 
   try {
-    await prisma.project.update({ where: { id }, data: projectData(parsed.data) });
+    // The split is a value, not a record with a history of its own, so it is
+    // replaced wholesale rather than reconciled row by row.
+    await prisma.$transaction([
+      prisma.projectExporter.deleteMany({ where: { projectId: id } }),
+      prisma.project.update({
+        where: { id },
+        data: {
+          ...projectData(parsed.data),
+          exporters: { create: allocationRows(parsed.data.exporters) },
+        },
+      }),
+    ]);
     revalidateProject(id, parsed.data.clientId);
     // The order may have moved to a different client.
     if (existing.clientId !== parsed.data.clientId) revalidatePath(`/clients/${existing.clientId}`);

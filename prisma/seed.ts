@@ -198,7 +198,7 @@ async function main() {
   }
 
   console.log("Seeding exporters…");
-  const exporters = [];
+  const exporters: Array<{ id: string; companyName: string }> = [];
   for (const [companyName, website, contactPerson, address] of EXPORTERS) {
     const slug = companyName.toLowerCase().replace(/[^a-z0-9]+/g, "");
     exporters.push(
@@ -242,15 +242,40 @@ async function main() {
     const magnitude = chance(0.12) ? randomInt(300, 900) : randomInt(4, 120);
     const orderValue = BigInt(magnitude) * 100_000n * 100n; // lakhs -> minor units
 
+    const quantity = randomInt(5, 4000);
+
+    /**
+     * Most orders go to one exporter; some are split across two or three, the
+     * way a large run gets shared out. A split never adds up to more than the
+     * order, and sometimes adds up to less — work not yet placed.
+     */
+    const makers = exporter
+      ? chance(0.3)
+        ? [exporter, ...Array.from({ length: randomInt(1, 2) }, () => pick(exporters))]
+            .filter((maker, index, all) => all.findIndex((m) => m.id === maker.id) === index)
+        : [exporter]
+      : [];
+
+    const allocations = makers.map((maker, position) => ({
+      exporterId: maker.id,
+      position,
+      // Split the quantity into roughly even parts, with the last taking the
+      // remainder so the arithmetic always lands exactly.
+      quantity:
+        position === makers.length - 1
+          ? quantity - Math.floor(quantity / makers.length) * (makers.length - 1)
+          : Math.floor(quantity / makers.length),
+    }));
+
     projects.push(
       await prisma.project.create({
         data: {
           clientId: client.id,
-          exporterId: exporter?.id ?? null,
+          exporters: { create: allocations },
           product,
           unit,
           orderId: `ORD-${String(2500 + i)}`,
-          quantity: randomInt(5, 4000),
+          quantity,
           orderValue,
           commissionPercentage: Number((randomInt(75, 450) / 100).toFixed(2)),
           currency: client.currency,

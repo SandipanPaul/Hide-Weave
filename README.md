@@ -245,6 +245,81 @@ Tests run against
 [seven pages saved from real exporter sites](src/lib/extraction/__fixtures__),
 never the live network.
 
+## Deploying to a small VPS
+
+```bash
+git clone https://github.com/SandipanPaul/Hide-Weave.git /srv/hide-weave
+cd /srv/hide-weave
+bash scripts/deploy.sh your-hostname
+```
+
+That installs Caddy, writes `.env` (generating `SESSION_SECRET` and prompting
+for the password), installs dependencies, creates an empty database, builds,
+registers a systemd service, gets an HTTPS certificate, and opens ports 80 and
+443. It is safe to run again — it never overwrites an existing `.env`.
+
+### You need a hostname, not an IP
+
+**Certificates are only issued to names.** There is no way to get a public
+certificate for a bare IP address, and this app refuses to work without one:
+the session cookie is `Secure` in production, so over plain HTTP the browser
+accepts the login and then declines to send the cookie back. Everyone sees the
+sign-in page again with no error, and concludes the password is broken.
+
+If you only have an IP, pick one of these:
+
+| | |
+| --- | --- |
+| **A domain** | ~$10/year. One A record at the IP. Best if partners will see the URL. |
+| **DuckDNS** | Free `yourname.duckdns.org`, two minutes, no card. |
+| **sslip.io** | No signup at all: `203-0-113-5.sslip.io` resolves to `203.0.113.5`. The URL advertises your IP. |
+| **Cloudflare Tunnel** | No open ports at all. Needs a domain for a named tunnel. |
+
+Do not work around this with a self-signed certificate — every partner clicks
+through a browser warning every time — and do not relax the `Secure` flag to
+run on plain HTTP, which puts the password and session cookie in cleartext on
+the open internet.
+
+### Oracle Cloud
+
+Two things catch people out on Oracle images:
+
+- **Ports are blocked twice.** The script opens them in the server's own
+  iptables; you must *also* allow 80 and 443 in the VCN security list from the
+  Oracle console. Opening only one of the two looks exactly like a broken
+  server.
+- **The free tier is ARM.** `better-sqlite3` is a native module. If `npm ci`
+  starts compiling rather than downloading, install `build-essential` and
+  `python3` first.
+
+### What it installed
+
+| | |
+| --- | --- |
+| `/etc/systemd/system/hide-weave.service` | keeps the app running, restarts it on failure |
+| `/etc/caddy/Caddyfile` | HTTPS in front of port 3000 |
+| `.env` | the password and session secret — **not** in git, **not** in backups |
+| `prisma/prod.db` | the database, empty until you import |
+
+```bash
+sudo systemctl status hide-weave    # what the app is doing
+sudo journalctl -u hide-weave -f    # its logs
+```
+
+### Updating
+
+```bash
+cd /srv/hide-weave
+git pull
+npm ci
+npx prisma migrate deploy
+npm run build
+sudo systemctl restart hide-weave
+```
+
+The running app serves the previous build until the restart, which is fine for
+this many users.
+
 ## Production database
 
 Development and production use **separate database files**, so a demo dataset

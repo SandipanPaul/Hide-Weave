@@ -29,12 +29,16 @@ export function cleanupE2ERows(): number {
       `DELETE FROM Payment
         WHERE projectId IN (SELECT id FROM Project WHERE orderId LIKE 'E2E-%')`,
     ).run();
+    db.prepare(
+      `DELETE FROM ProjectExporter
+        WHERE projectId IN (SELECT id FROM Project WHERE orderId LIKE 'E2E-%')`,
+    ).run();
     db.prepare(`DELETE FROM Project WHERE orderId LIKE 'E2E-%'`).run();
 
-    // An exporter is referenced by projects rather than owning them, so the
-    // reference is cleared before the row goes.
+    // An exporter is linked to projects through allocations, which go with
+    // the exporter; the orders themselves are somebody else's to clean up.
     db.prepare(
-      `UPDATE Project SET exporterId = NULL
+      `DELETE FROM ProjectExporter
         WHERE exporterId IN (SELECT id FROM Exporter WHERE companyName LIKE 'E2E %')`,
     ).run();
     db.prepare(`DELETE FROM Exporter WHERE companyName LIKE 'E2E %'`).run();

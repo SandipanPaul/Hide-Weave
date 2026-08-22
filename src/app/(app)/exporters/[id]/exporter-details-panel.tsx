@@ -91,7 +91,7 @@ export function ExporterDetailsPanel({ exporter }: { exporter: ExporterDetailVie
                     {exporter.projectCount > 0
                       ? `This exporter will be hidden everywhere in the app. The ${exporter.projectCount} order${
                           exporter.projectCount === 1 ? "" : "s"
-                        } sourced through them are kept and simply lose the supplier — an order that happened still happened.`
+                        } they are making are kept and simply lose this maker — an order that happened still happened.`
                       : "This exporter will be hidden everywhere in the app."}
                   </AlertDialogDescription>
                 </AlertDialogHeader>

@@ -26,7 +26,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 export type ProjectDetailView = ProjectFormValues & {
   id: string;
   clientName: string;
-  exporterName: string | null;
+  /** Who is making it, resolved for display. */
+  exporterNames: Array<{ id: string; name: string; quantity: number }>;
   orderValueDisplay: string;
   orderDateDisplay: string;
   expectedDeliveryDisplay: string | null;
@@ -49,6 +50,8 @@ export function ProjectDetailsPanel({
   const [isDeleting, startDelete] = useTransition();
 
   const boundUpdate = updateProject.bind(null, project.id);
+  const assigned = project.exporterNames.reduce((total, maker) => total + maker.quantity, 0);
+  const unassigned = Number(project.quantity) - assigned;
 
   return (
     <Card>
@@ -133,16 +136,34 @@ export function ProjectDetailsPanel({
                 {project.clientName}
               </Link>
             </DetailRow>
-            <DetailRow label="Exporter">
-              {project.exporterName ? (
-                <Link
-                  href={`/exporters/${project.exporterId}`}
-                  className="underline-offset-4 hover:underline"
-                >
-                  {project.exporterName}
-                </Link>
-              ) : (
+            <DetailRow label={project.exporterNames.length > 1 ? "Exporters" : "Exporter"}>
+              {project.exporterNames.length === 0 ? (
                 DASH
+              ) : (
+                <ul className="space-y-0.5">
+                  {project.exporterNames.map((maker) => (
+                    <li key={maker.id} className="flex justify-between gap-3">
+                      <Link
+                        href={`/exporters/${maker.id}`}
+                        className="min-w-0 truncate underline-offset-4 hover:underline"
+                      >
+                        {maker.name}
+                      </Link>
+                      <span className="shrink-0 tabular-nums text-muted-foreground">
+                        {maker.quantity.toLocaleString("en-IN")} {project.unit}
+                      </span>
+                    </li>
+                  ))}
+                  {/* Work not yet placed with anyone. */}
+                  {unassigned > 0 ? (
+                    <li className="flex justify-between gap-3 text-muted-foreground">
+                      <span>Not yet assigned</span>
+                      <span className="shrink-0 tabular-nums">
+                        {unassigned.toLocaleString("en-IN")} {project.unit}
+                      </span>
+                    </li>
+                  ) : null}
+                </ul>
               )}
             </DetailRow>
             <DetailRow label="Product">{project.product}</DetailRow>

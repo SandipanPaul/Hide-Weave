@@ -47,7 +47,7 @@ test.describe("economics", () => {
     await page.getByRole("option", { name: client }).click();
     await dialog.getByLabel("Product").fill("Frozen prawns");
     await dialog.getByLabel("Order ID").fill(orderId);
-    await dialog.getByLabel("Quantity").fill("500");
+    await dialog.getByLabel(/^Quantity/).fill("500");
     await dialog.getByLabel("Order value").fill("1000000");
     await dialog.getByLabel("Commission %").fill("5");
     await dialog.getByLabel("Status").click();

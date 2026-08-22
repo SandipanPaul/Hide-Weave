@@ -1,7 +1,10 @@
 "use client";
 
+import { Plus, X } from "lucide-react";
 import { SelectField, TextAreaField, TextField } from "@/components/form/fields";
 import { FormActions, FormFields } from "@/components/form/form-shell";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { FormErrors } from "@/components/form/form-errors";
 import { useEntityForm, type EntityFormAction } from "@/components/form/use-entity-form";
 import {
@@ -17,9 +20,12 @@ import {
 } from "@/lib/money";
 import { projectInputSchema } from "@/lib/schemas";
 
+/** One row of the split: who is making it, and how much. */
+export type ExporterRow = { exporterId: string; quantity: string };
+
 export type ProjectFormValues = {
   clientId: string;
-  exporterId: string;
+  exporters: ExporterRow[];
   product: string;
   orderId: string;
   quantity: string;
@@ -42,7 +48,7 @@ export type ProjectFormOptions = {
 export function emptyProject(): ProjectFormValues {
   return {
     clientId: "",
-    exporterId: "",
+    exporters: [],
     product: "",
     orderId: "",
     quantity: "",
@@ -156,39 +162,40 @@ export function ProjectForm({
   ];
 
   const exporterOptions = [
-    { value: "", label: "No exporter" },
+    { value: "", label: "Choose an exporter…" },
     ...options.exporters.map((exporter) => ({
       value: exporter.id,
       label: exporter.companyName,
     })),
   ];
 
+  // Always show one row to type into, the way the contact fields do.
+  const exporterRows: ExporterRow[] =
+    values.exporters.length > 0 ? values.exporters : [{ exporterId: "", quantity: "" }];
+
+  const setExporters = (rows: ExporterRow[]) => setValues((c) => ({ ...c, exporters: rows }));
+
+  const updateRow = (index: number, patch: Partial<ExporterRow>) =>
+    setExporters(exporterRows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+
+  const assigned = exporterRows.reduce((total, row) => total + (Number(row.quantity) || 0), 0);
+  const ordered = Number(values.quantity) || 0;
+  const remaining = ordered - assigned;
+
   return (
     <form action={formAction} className="flex min-h-0 flex-1 flex-col gap-4" noValidate>
       <FormErrors errors={serverErrors?.formErrors ?? []} />
 
       <FormFields scrollable={scrollable}>
-        <div className="grid gap-4 @lg:grid-cols-2">
-          <SelectField
-            label="Client"
-            name="clientId"
-            required
-            options={clientOptions}
-            value={values.clientId}
-            onValueChange={setClient}
-            error={errorFor("clientId")}
-          />
-
-          <SelectField
-            label="Exporter"
-            name="exporterId"
-            hint="Optional — who supplies this order."
-            options={exporterOptions}
-            value={values.exporterId}
-            onValueChange={set("exporterId")}
-            error={errorFor("exporterId")}
-          />
-        </div>
+        <SelectField
+          label="Client"
+          name="clientId"
+          required
+          options={clientOptions}
+          value={values.clientId}
+          onValueChange={setClient}
+          error={errorFor("clientId")}
+        />
 
         <div className="grid gap-4 @lg:grid-cols-2">
           <TextField
@@ -267,6 +274,98 @@ export function ProjectForm({
             error={errorFor("commissionPercentage")}
           />
         </div>
+
+        {/* Who is making it. A large order is often shared between several
+            exporters, so this is a list rather than a single choice, and it
+            adds up against the quantity above. */}
+        <fieldset className="space-y-2 rounded-lg border p-3">
+          <legend className="px-1 text-sm font-medium">
+            Exporters
+            <span className="ml-1.5 font-normal text-muted-foreground">
+              optional — who is making this order
+            </span>
+          </legend>
+
+          {exporterRows.map((row, index) => (
+            <div
+              key={index}
+              className="grid grid-cols-[minmax(0,1fr)_8rem_2rem] items-start gap-2"
+            >
+              <SelectField
+                className="min-w-0"
+                label={index === 0 ? "Exporter" : `Exporter ${index + 1}`}
+                name="exporterId"
+                options={exporterOptions}
+                value={row.exporterId}
+                onValueChange={(value) => updateRow(index, { exporterId: value })}
+              />
+              <TextField
+                className="min-w-0"
+                label={index === 0 ? "Share" : `Share ${index + 1}`}
+                name="exporterQuantity"
+                inputMode="numeric"
+                placeholder="0"
+                value={row.quantity}
+                onValueChange={(value) => updateRow(index, { quantity: value })}
+              />
+              {/* The spacer stands in for the label the other two cells have,
+                  so the button lines up with the controls, not with their
+                  labels. The cell is always present so rows keep the same
+                  widths whether or not they can be removed. */}
+              <div className="space-y-1.5">
+                <Label aria-hidden className="invisible select-none">
+                  Remove
+                </Label>
+                {exporterRows.length > 1 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="mt-0.5"
+                    aria-label={`Remove exporter ${index + 1}`}
+                    onClick={() => setExporters(exporterRows.filter((_, i) => i !== index))}
+                  >
+                    <X className="size-4" aria-hidden />
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="text-muted-foreground"
+              onClick={() => setExporters([...exporterRows, { exporterId: "", quantity: "" }])}
+            >
+              <Plus className="size-3.5" aria-hidden />
+              Add another exporter
+            </Button>
+
+            {/* The running total, so a split that does not add up is obvious
+                while you are typing rather than on submit. */}
+            {ordered > 0 && assigned > 0 ? (
+              <p
+                className={`text-xs tabular-nums ${
+                  remaining < 0 ? "font-medium text-destructive" : "text-muted-foreground"
+                }`}
+                aria-live="polite"
+              >
+                {remaining < 0
+                  ? `${Math.abs(remaining).toLocaleString("en-IN")} ${values.unit} over the order's ${ordered.toLocaleString("en-IN")}`
+                  : remaining === 0
+                    ? `All ${ordered.toLocaleString("en-IN")} ${values.unit} assigned`
+                    : `${remaining.toLocaleString("en-IN")} ${values.unit} not yet assigned`}
+              </p>
+            ) : null}
+          </div>
+
+          {errorFor("exporters") ? (
+            <p className="text-xs font-medium text-destructive">{errorFor("exporters")}</p>
+          ) : null}
+        </fieldset>
 
         {/* The figure this whole record exists to produce, shown before saving
             rather than discovered afterwards. */}
