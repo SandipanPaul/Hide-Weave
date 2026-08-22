@@ -34,6 +34,10 @@ export function ClientsTable({
           <TableHeader>
             <TableRow>
               <SortableHeader column="name" label="Name" params={params} pathname={PATH} />
+              {/* Beside the name on purpose: where a client stands is one of
+                  the first things you want, and as the last column it was the
+                  first thing cut off on a narrow screen. */}
+              <SortableHeader column="status" label="Status" params={params} pathname={PATH} />
               <TableHead>Address</TableHead>
               <SortableHeader column="country" label="Country" params={params} pathname={PATH} />
               <SortableHeader column="phone" label="Phone" params={params} pathname={PATH} />
@@ -51,7 +55,6 @@ export function ClientsTable({
                 params={params}
                 pathname={PATH}
               />
-              <SortableHeader column="status" label="Status" params={params} pathname={PATH} />
             </TableRow>
           </TableHeader>
 
@@ -67,7 +70,11 @@ export function ClientsTable({
                   </Link>
                 </TableCell>
 
-                <TableCell className="max-w-[22ch] truncate text-muted-foreground">
+                <TableCell>
+                  <ClientStatusBadge status={row.status} />
+                </TableCell>
+
+                <TableCell className="max-w-[14ch] truncate text-muted-foreground">
                   {row.address ?? "—"}
                 </TableCell>
 
@@ -87,7 +94,7 @@ export function ClientsTable({
                 </TableCell>
 
                 <TableCell>
-                  <div className="flex max-w-[26ch] items-baseline gap-1.5">
+                  <div className="flex max-w-[20ch] items-baseline gap-1.5">
                     {row.emails[0] ? (
                       <a
                         href={`mailto:${row.emails[0]}`}
@@ -118,9 +125,6 @@ export function ClientsTable({
                   {row.nextSamplingDate ? formatDateOnly(row.nextSamplingDate) : "—"}
                 </TableCell>
 
-                <TableCell>
-                  <ClientStatusBadge status={row.status} />
-                </TableCell>
               </TableRow>
             ))}
           </TableBody>

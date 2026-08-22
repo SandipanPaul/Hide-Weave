@@ -261,9 +261,16 @@ test.describe("csv import", () => {
   });
 
   test("finds clients by country name even though a code is stored", async ({ page }) => {
+    // "JP" is what is stored; "Japan" is what a person types. The search has
+    // to resolve the name to the code before it reaches the database.
     await page.getByLabel("Search clients").fill("Japan");
     await expect(page.getByRole("link", { name: "Sakura Import Co" })).toBeVisible();
-    await expect(page.getByText(/of 1 clients/)).toBeVisible();
+
+    // And it must actually narrow: a client filed under another country is
+    // gone. Asserting a total count instead would break the moment the
+    // database holds a second Japanese client, which says nothing about the
+    // behaviour being tested.
+    await expect(page.getByRole("link", { name: "Meridian Foods Ltd" })).toHaveCount(0);
   });
 
   test("offers a template whose own headers map cleanly", async ({ page }, testInfo) => {
