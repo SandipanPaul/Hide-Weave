@@ -174,33 +174,118 @@ decisions → summary → confirm.
 Adding an import to another tab means writing a config and two server actions —
 no UI work.
 
-## Economics
+## Client references
+
+Every client carries a short reference — `HWC00042` — alongside the cuid primary
+key. Three letters and five digits with no separator, so it is one unbroken
+token that a mailbox search cannot half-match. The database needs an id that is unique and stable; a person needs one
+they can quote in an email subject and search a mailbox for. Those are
+different jobs, and one value does both badly.
+
+Issued by taking the highest number in use and adding one
+([`code.ts`](src/lib/clients/code.ts)), **not** by counting rows: a deleted
+client never frees its number for someone else, because a reference that
+pointed at two clients over time would make the mail it was quoted in
+ambiguous. The number is read inside the same transaction that writes the
+client, so importing a CSV of new clients numbers them in sequence.
+
+It shows under the name in the list, beside the name on the client's page, and
+in their details. Searching accepts the full code, the bare number, or lower
+case — `HWC00003`, `00003` and `hwc00003` all find the same client.
+
+## Finances
 
 Every figure on the dashboard is derived from Projects, Payments, Clients and
 Samplings — nothing on that page is stored or typed in. The arithmetic lives in
-[`aggregate.ts`](src/lib/economics/aggregate.ts) as pure functions over plain
-rows, with `today` passed in rather than read from the clock, so all 27 of its
+[`aggregate.ts`](src/lib/finances/aggregate.ts) as pure functions over plain
+rows, with `today` passed in rather than read from the clock, so all 34 of its
 tests run offline and deterministically. The page is only a rendering of what
 they return.
 
-Three definitions worth stating, because the spec was ambiguous:
+Four definitions worth stating, because the spec was ambiguous:
 
 - **Outstanding** is commission owed less payments received — *not* order value
   less payments, which would claim ₹50,00,000 was due on a ₹1,00,000 commission.
 - **Commission at risk** is the slice of that outstanding on orders **not yet
   delivered**: the goods have not landed, so the commission is not firmly owed.
-- **Monthly retainer** is what active clients are billed each month. It is shown
-  as its own card and never folded into cash received, because no payment
-  record exists for it.
+- **Retainers received** is the fees actually logged in the range, with the
+  monthly rate across active clients beside it for context. Only the first is
+  income.
+- **Net earned** is commission earned, plus retainer fees received, less
+  expenses.
+  Expenses never touch outstanding: what a client owes is unaffected by what it
+  cost to serve them, so a spend reduces earnings and leaves receivables alone.
+
+The **passbook** is the page's ledger — every entry in the range oldest first,
+commission and retainer fees received in, expenses out, with the balance after
+each. Every row is money that actually moved: commission *earned* on an order
+that has not paid is not an entry, and neither is a retainer nobody has sent.
+Both stay on the cards above, which is what makes the closing balance mean
+something.
+
+Only expenses are editable there. Commission belongs to an order and is
+corrected on its page, where the balance it settles is visible; a retainer row
+is not a record at all but a month derived from the schedule, so it changes by
+starting or stopping the retainer on its client.
+
+**Deleting never removes an entry from the ledger.** Money that moved stays
+recorded regardless of what happened afterwards to the order or client it
+belonged to — deleting a project takes it out of the live business (its value,
+its commission, its receivables) while the cash it took in and the costs it ran
+up stay in the passbook. The order is still named on those rows, just no longer
+linked, because there is no page left to open. Deleting a client works the same
+way: it closes any running retainer, which stops further months falling due,
+and leaves the months already charged where they are.
 
 Two different dates are in play, deliberately: order value and commission are
 bucketed by `orderDate`, cash received by `paidOn` — a payment in March against
 a January order is March's cash. Outstanding ignores the range entirely and
 counts every payment ever made, because it is a balance as of now.
 
+## Expenses and retainers
+
+Money the agent spent, recorded either against an order — courier, samples, a
+factory visit, on the project's own page — or with no order behind it at all,
+added from the passbook. A standalone expense can still name the **client** it
+was for: a sample posted to a prospect or a trip to visit someone who has not
+ordered yet was spent for somebody, even with no order to hang it on. Both
+kinds are one `Expense` model, and `projectId` and `clientId` are independent —
+an expense may have both, either or neither.
+
+**Retainers** are the other half, and they are deliberately manual.
+`Client.fixedMonthly` is the rate a client is charged; a `RetainerReceipt` is
+one fee actually arriving, logged with a button on that client's page. There is
+no schedule and nothing accrues: only the agent knows whether a client has
+paid, and a schedule that assumed they had would put money in the ledger nobody
+had sent. The amount is captured when the fee is logged, so changing a client's
+rate later never rewrites what was already received.
+
+The monthly rate still appears on the dashboard, beside the fees received, as
+context — never counted as income.
+
+An expense on a project inherits that project's currency, so it can never be
+denominated differently from the commission it nets against — and a project
+with expenses recorded refuses a currency change for the same reason payments
+block one. Which project an expense belongs to is fixed at creation: moving a
+spend between orders would rewrite two projects' net figures at once.
+
+Net is allowed to go negative. An order that cost more to service than it
+earned is exactly the thing worth seeing, so nothing floors at zero.
+
 Currencies are never converted. The page shows one currency at a time,
-defaulting to whichever has the most orders, and "Export CSV" hands back the
-individual orders behind the figures rather than the figures themselves.
+defaulting to whichever has the most orders.
+
+**Export CSV offers two files**, because they answer different questions and
+cannot honestly be one:
+
+- **Ledger** is the passbook row for row, with a running balance. It
+  reconciles: the last balance in the file is the closing balance on screen,
+  and the In and Out columns add up to the totals printed under the table.
+  Deleted orders appear here, named but with nothing to follow.
+- **Orders** is the business behind the figures — value, rate, commission,
+  outstanding. Its `Received` column counts every payment ever made against an
+  order and stops at the commission owed, so it deliberately does *not* tie to
+  the passbook, which is a record of cash inside one date range.
 
 ## Website extraction
 
@@ -478,5 +563,12 @@ Built in milestones. Current state:
 - [x] **3.** Reusable CSV import, wired into Clients
 - [x] **4.** Projects tab: list, detail, payments ledger, CSV import
 - [x] **5.** Exporters tab: CRUD, then website extraction
-- [x] **6.** Economics: tested aggregate functions, then the dashboard
+- [x] **6.** Finances: tested aggregate functions, then the dashboard
 - [x] **7.** Polish: empty states, error handling, accessibility
+
+Added since:
+
+- Multiple exporters per project, with a quantity split
+- A `CHASING` client status, for names being pursued who have not ordered yet
+- Expenses, on an order and off it, and the Finances passbook
+- Retainer fees, logged by hand on the client and counted as income when they arrive

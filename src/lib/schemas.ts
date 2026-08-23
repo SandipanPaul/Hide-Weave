@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   CLIENT_STATUSES,
+  EXPENSE_CATEGORIES,
   PROJECT_STATUSES,
   SAMPLING_STATUSES,
 } from "@/lib/enums";
@@ -200,7 +201,6 @@ export const clientInputSchema = z
     return { ...data, fixedMonthly };
   });
 
-export type ClientInput = z.infer<typeof clientInputSchema>;
 
 // -------------------------------------------------------- ClientSampling
 
@@ -212,7 +212,6 @@ export const samplingInputSchema = z.object({
   notes: optionalText,
 });
 
-export type SamplingInput = z.infer<typeof samplingInputSchema>;
 
 // -------------------------------------------------------------- Exporter
 
@@ -227,7 +226,6 @@ export const exporterInputSchema = z.object({
   notes: optionalText,
 });
 
-export type ExporterInput = z.infer<typeof exporterInputSchema>;
 
 // --------------------------------------------------------------- Project
 
@@ -307,15 +305,21 @@ export const projectInputSchema = z
       });
     }
   })
-  .transform((data, ctx) => ({
-    ...data,
-    orderValue: parseMoneyField(data.orderValue, data.currency, ctx, "orderValue") ?? 0n,
-  }));
+  .transform((data, ctx) => {
+    const orderValue = parseMoneyField(data.orderValue, data.currency, ctx, "orderValue");
+    // A consignment worth nothing, or less than nothing, is not an order. Left
+    // unchecked this flowed straight into commission and every total above it.
+    if (orderValue !== undefined && orderValue <= 0n) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["orderValue"],
+        message: "Order value must be greater than zero.",
+      });
+    }
+    return { ...data, orderValue: orderValue ?? 0n };
+  });
 
-export type ProjectInput = z.infer<typeof projectInputSchema>;
 
-/** How much of an order one exporter is making. */
-export type ExporterSplit = z.infer<typeof exporterSplitSchema>[number];
 
 // --------------------------------------------------------------- Payment
 
@@ -338,18 +342,38 @@ export function makePaymentInputSchema(currency: string) {
     }));
 }
 
-export type PaymentInput = z.infer<ReturnType<typeof makePaymentInputSchema>>;
 
-// ----------------------------------------------------------- List queries
+// --------------------------------------------------------------- Expense
 
-export const listQuerySchema = z.object({
-  q: z.string().trim().max(200).optional(),
-  sort: z.string().trim().max(50).optional(),
-  dir: z.enum(["asc", "desc"]).default("desc"),
-  page: z.coerce.number().int().min(1).default(1),
-});
+/**
+ * Money the agent spent. Like a payment, the currency is passed in rather than
+ * chosen on the field: an expense on a project is denominated in that
+ * project's currency, and a general expense in whichever currency the user is
+ * looking at.
+ *
+ * Unlike a payment, an expense need not belong to a project — office rent and
+ * a trade-fair stand are real costs with no order behind them. It may name a
+ * client instead, or as well: a sample posted to a prospect was spent *for*
+ * someone even though no order exists yet.
+ */
+export function makeExpenseInputSchema(currency: string) {
+  return z
+    .object({
+      projectId: z.preprocess(blankToUndefined, z.string().optional()),
+      clientId: z.preprocess(blankToUndefined, z.string().optional()),
+      description: z.string().trim().min(1, "Say what this was for.").max(200),
+      amount: z.string().trim().min(1, "Amount is required."),
+      incurredOn: dateStringSchema,
+      category: optionalWithDefault(z.enum(EXPENSE_CATEGORIES).optional()),
+      notes: optionalText,
+    })
+    .transform((data, ctx) => ({
+      ...data,
+      amount: parseMoneyField(data.amount, currency, ctx, "amount") ?? 0n,
+    }));
+}
 
-export type ListQuery = z.infer<typeof listQuerySchema>;
+
 
 export type FieldErrors = Record<string, string[] | undefined>;
 

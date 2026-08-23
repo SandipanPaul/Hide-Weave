@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CommissionSummary } from "./commission-summary";
+import { ExpensesSection } from "./expenses-section";
 import { PaymentsSection, type PaymentView } from "./payments-section";
 import { ProjectDetailsPanel, type ProjectDetailView } from "./project-details-panel";
+import type { ExpenseView } from "@/components/expenses/expense-form";
 import { BackLink } from "@/components/layout/back-link";
 import { PageHeader } from "@/components/layout/page-header";
 import { formatDateOnly, utcToDateOnly } from "@/lib/dates";
+import { EXPENSE_CATEGORY_LABELS, type ExpenseCategory } from "@/lib/enums";
 import { formatMoney, minorToMajorString } from "@/lib/money";
 import { getProject, getProjectFormOptions } from "@/lib/projects/queries";
 import { runningBalances } from "@/lib/projects/ledger";
@@ -40,6 +43,25 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     balanceDisplay: money(balances[index]),
     method: payment.method,
     notes: payment.notes,
+  }));
+
+  const expenses: ExpenseView[] = project.expenses.map((expense) => ({
+    id: expense.id,
+    incurredOn: utcToDateOnly(expense.incurredOn),
+    displayDate: formatDateOnly(expense.incurredOn),
+    description: expense.description,
+    amountDisplay: money(expense.amount),
+    amountInput: minorToMajorString(expense.amount, currency),
+    category: expense.category ?? "",
+    categoryLabel: expense.category
+      ? (EXPENSE_CATEGORY_LABELS[expense.category as ExpenseCategory] ?? expense.category)
+      : null,
+    notes: expense.notes,
+    projectId: project.id,
+    // The order already names the client, so a spend on it is not offered the
+    // picker and carries no separate attribution.
+    clientId: expense.clientId ?? "",
+    clientName: null,
   }));
 
   const detail: ProjectDetailView = {
@@ -96,17 +118,30 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           overpaidDisplay={ledger.overpaid > 0n ? money(ledger.overpaid) : null}
           percentPaid={ledger.percentPaid}
           settled={ledger.settled}
+          expensesDisplay={ledger.expenses > 0n ? money(ledger.expenses) : null}
+          netDisplay={money(ledger.net)}
         />
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:items-start">
           <ProjectDetailsPanel project={detail} options={options} />
-          <PaymentsSection
-            projectId={project.id}
-            currency={currency}
-            payments={payments}
-            outstandingInput={minorToMajorString(ledger.outstanding, currency)}
-            settled={ledger.settled}
-          />
+
+          <div className="space-y-6">
+            <PaymentsSection
+              projectId={project.id}
+              currency={currency}
+              payments={payments}
+              outstandingInput={minorToMajorString(ledger.outstanding, currency)}
+              settled={ledger.settled}
+            />
+            <ExpensesSection
+              projectId={project.id}
+              currency={currency}
+              expenses={expenses}
+              totalDisplay={money(ledger.expenses)}
+              netDisplay={money(ledger.net)}
+              commissionDisplay={money(ledger.commission)}
+            />
+          </div>
         </div>
       </div>
     </>

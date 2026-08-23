@@ -7,7 +7,7 @@ import type {
   ImportOutcome,
   ImportPayloadRow,
 } from "@/lib/csv/types";
-import { contactRows, EMAIL_CONTACTS_SELECT, findClientConflict } from "@/lib/clients/queries";
+import { EMAIL_CONTACTS_SELECT, contactRows, findClientConflict, reserveClientCode } from "@/lib/clients/queries";
 import { ImportRowError, runImport } from "@/lib/csv/import-runner";
 import { foldCase } from "@/lib/keys";
 import { clientRowInput, csvColumnFor } from "@/lib/csv/configs/clients";
@@ -143,7 +143,14 @@ export async function importClients(
       outcome = "updated";
     } else {
       const client = await tx.client.create({
-        data: { ...fields, contacts: { create: contacts } },
+        data: {
+          ...fields,
+          // Read inside the transaction, so a run that imports several new
+          // clients numbers them in sequence rather than issuing one code
+          // repeatedly.
+          code: await reserveClientCode(tx),
+          contacts: { create: contacts },
+        },
       });
       clientId = client.id;
       outcome = "created";

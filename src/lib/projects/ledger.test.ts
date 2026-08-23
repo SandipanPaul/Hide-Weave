@@ -66,3 +66,41 @@ describe("runningBalances", () => {
     expect(runningBalances(1_000n, [{ amount: 1_500n }])).toEqual([-500n]);
   });
 });
+
+describe("expenses on a project", () => {
+  it("deducts expenses from commission without changing what is outstanding", () => {
+    // ₹1,00,000 at 2% earns ₹2,000; ₹500 of courier leaves ₹1,500 net. The
+    // client still owes the full ₹2,000 — the agent's costs are not theirs.
+    const ledger = projectLedger({ orderValue: 100_000_00n, commissionPercentage: 2 }, [], [
+      { amount: 500_00n },
+    ]);
+
+    expect(ledger.commission).toBe(2_000_00n);
+    expect(ledger.expenses).toBe(500_00n);
+    expect(ledger.net).toBe(1_500_00n);
+    expect(ledger.outstanding).toBe(2_000_00n);
+  });
+
+  it("reports a loss when an order cost more to service than it earned", () => {
+    const ledger = projectLedger({ orderValue: 100_000_00n, commissionPercentage: 2 }, [], [
+      { amount: 3_000_00n },
+    ]);
+    expect(ledger.net).toBe(-1_000_00n);
+  });
+
+  it("leaves settled untouched — expenses are not payments", () => {
+    const ledger = projectLedger(
+      { orderValue: 100_000_00n, commissionPercentage: 2 },
+      [{ amount: 2_000_00n }],
+      [{ amount: 500_00n }],
+    );
+    expect(ledger.settled).toBe(true);
+    expect(ledger.net).toBe(1_500_00n);
+  });
+
+  it("treats no expenses as zero, not as missing", () => {
+    const ledger = projectLedger({ orderValue: 100_000_00n, commissionPercentage: 2 }, []);
+    expect(ledger.expenses).toBe(0n);
+    expect(ledger.net).toBe(ledger.commission);
+  });
+});

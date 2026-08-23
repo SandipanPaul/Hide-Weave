@@ -1,9 +1,9 @@
 "use client";
 
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Ban, CalendarPlus, Check, ChevronDown, Loader2, Pencil, Trash2, X } from "lucide-react";
+import { Ban, CalendarPlus, Check, ChevronDown, Loader2, X } from "lucide-react";
 import {
   createSampling,
   deleteSampling,
@@ -14,18 +14,9 @@ import { Field } from "@/components/form/field";
 import { FormErrors } from "@/components/form/form-errors";
 import { SubmitButton } from "@/components/form/submit-button";
 import { EmptyState } from "@/components/layout/empty-state";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { SamplingStatusBadge } from "@/components/status-badge";
+import { useAction } from "@/components/form/use-action";
+import { RowActions } from "@/components/data-table/row-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -165,21 +156,8 @@ function EditSamplingForm({
 }
 
 function SamplingRow({ sampling, clientId }: { sampling: SamplingView; clientId: string }) {
-  const router = useRouter();
   const [editing, setEditing] = useState(false);
-  const [isPending, startTransition] = useTransition();
-
-  const run = (work: () => Promise<ActionResult>, successMessage: string) => {
-    startTransition(async () => {
-      const result = await work();
-      if (result.ok) {
-        toast.success(successMessage);
-        router.refresh();
-      } else {
-        toast.error(result.formErrors[0] ?? "That didn't work. Please try again.");
-      }
-    });
-  };
+  const { run, pending } = useAction();
 
   if (editing) {
     return (
@@ -206,7 +184,7 @@ function SamplingRow({ sampling, clientId }: { sampling: SamplingView; clientId:
       <SamplingStatusBadge status={sampling.status} />
 
       <div className="flex items-center gap-1">
-        {isPending ? (
+        {pending ? (
           <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
         ) : null}
 
@@ -215,7 +193,7 @@ function SamplingRow({ sampling, clientId }: { sampling: SamplingView; clientId:
             <Button
               variant="ghost"
               size="icon-sm"
-              disabled={isPending}
+              disabled={pending}
               aria-label={`Mark sampling on ${sampling.displayDate} complete`}
               onClick={() =>
                 run(() => setSamplingStatus(sampling.id, "COMPLETED"), "Marked complete.")
@@ -226,7 +204,7 @@ function SamplingRow({ sampling, clientId }: { sampling: SamplingView; clientId:
             <Button
               variant="ghost"
               size="icon-sm"
-              disabled={isPending}
+              disabled={pending}
               aria-label={`Cancel sampling on ${sampling.displayDate}`}
               onClick={() =>
                 run(() => setSamplingStatus(sampling.id, "CANCELLED"), "Sampling cancelled.")
@@ -239,7 +217,7 @@ function SamplingRow({ sampling, clientId }: { sampling: SamplingView; clientId:
           <Button
             variant="ghost"
             size="icon-sm"
-            disabled={isPending}
+            disabled={pending}
             aria-label={`Reopen sampling on ${sampling.displayDate}`}
             onClick={() => run(() => setSamplingStatus(sampling.id, "SCHEDULED"), "Reopened.")}
           >
@@ -247,48 +225,18 @@ function SamplingRow({ sampling, clientId }: { sampling: SamplingView; clientId:
           </Button>
         )}
 
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          disabled={isPending}
-          aria-label={`Edit sampling on ${sampling.displayDate}`}
-          onClick={() => setEditing(true)}
-        >
-          <Pencil className="size-4" aria-hidden />
-        </Button>
-
-        <AlertDialog>
-          <AlertDialogTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                disabled={isPending}
-                aria-label={`Delete sampling on ${sampling.displayDate}`}
-              />
-            }
-          >
-            <Trash2 className="size-4" aria-hidden />
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete this sampling?</AlertDialogTitle>
-              <AlertDialogDescription>
-                The sampling on {sampling.displayDate}
-                {sampling.product ? ` for ${sampling.product}` : ""} will be removed from this
-                client.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Keep it</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => run(() => deleteSampling(sampling.id), "Sampling deleted.")}
-              >
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <RowActions
+          pending={pending}
+          editLabel={`Edit sampling on ${sampling.displayDate}`}
+          onEdit={() => setEditing(true)}
+          deleteLabel={`Delete sampling on ${sampling.displayDate}`}
+          confirmTitle="Delete this sampling?"
+          confirmDescription={`The sampling on ${sampling.displayDate}${
+            sampling.product ? ` for ${sampling.product}` : ""
+          } will be removed from this client.`}
+          confirmLabel="Delete"
+          onDelete={() => run(() => deleteSampling(sampling.id), "Sampling deleted.")}
+        />
       </div>
     </li>
   );

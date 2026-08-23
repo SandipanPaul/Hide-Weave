@@ -9,7 +9,7 @@ import { cleanupE2ERows } from "./db-cleanup";
  * shows the seeded dataset, so "this client earned exactly ₹50,000" is
  * checkable while "the page totals X" would not be.
  */
-test.describe("economics", () => {
+test.describe("finances", () => {
   test.beforeEach(async ({ page }) => {
     cleanupE2ERows();
     await signIn(page);
@@ -68,12 +68,13 @@ test.describe("economics", () => {
     await expect(page.getByRole("cell", { name: "₹30,000.00" })).toBeVisible();
 
     // The dashboard, in the currency this order was billed in.
-    await page.goto("/economics?currency=INR");
+    await page.goto("/finances?currency=INR");
 
-    const topClients = page.getByRole("table").filter({ hasText: "Avg %" });
-    const row = topClients.getByRole("row").filter({ hasText: client });
-    await expect(row).toContainText("₹50,000.00");
-    await expect(row).toContainText("5.00%");
+    // The part payment appears in the passbook as money in, against its order.
+    const passbook = page.getByRole("table").filter({ hasText: "Balance" });
+    const entry = passbook.getByRole("row").filter({ hasText: orderId });
+    await expect(entry).toContainText("₹20,000.00");
+    await expect(entry).toContainText(client);
 
     // Delivered and part-paid, so it is a receivable for what is still owed.
     const receivables = page.getByRole("row").filter({ hasText: orderId });
@@ -86,48 +87,78 @@ test.describe("economics", () => {
   });
 
   test("never presents order value as income", async ({ page }) => {
-    await page.goto("/economics");
+    await page.goto("/finances");
 
     // The two headline figures are labelled so they cannot be confused, and
     // order value is explicitly disclaimed.
     await expect(page.getByText("Commission earned", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Goods moved through you — not income")).toBeVisible();
-    await expect(page.getByText(/Separate scales/)).toBeVisible();
+    await expect(page.getByText("Commission earned less expenses")).toBeVisible();
   });
 
   test("respects the date range, down to an empty one", async ({ page }) => {
-    await page.goto("/economics");
+    await page.goto("/finances");
     // Default is the last 12 months, so the reset control is not offered.
     await expect(page.getByRole("button", { name: "Last 12 months" })).toHaveCount(0);
 
     // A window before any data exists: every figure falls to zero rather than
     // the page erroring or silently showing everything.
-    await page.goto("/economics?from=2000-01-01&to=2000-12-31&currency=INR");
+    await page.goto("/finances?from=2000-01-01&to=2000-12-31&currency=INR");
     const cards = page.locator("main");
     await expect(cards.getByText("₹0.00").first()).toBeVisible();
     await expect(page.getByText("Nothing in this range").first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Last 12 months" })).toBeVisible();
   });
 
-  test("exports the rows the figures were derived from", async ({ page }, testInfo) => {
-    await page.goto("/economics?currency=INR");
-
+  /** Both exports live behind one menu, so each is opened by name. */
+  async function exportCsv(
+    page: import("@playwright/test").Page,
+    testInfo: import("@playwright/test").TestInfo,
+    item: "Ledger" | "Orders",
+  ) {
     const downloadPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: "Export CSV" }).click();
+    await page.getByRole("menuitem", { name: new RegExp(item) }).click();
     const download = await downloadPromise;
-    expect(download.suggestedFilename()).toMatch(/^economics-INR-\d{4}-\d{2}-\d{2}-to-/);
 
-    const saved = testInfo.outputPath("economics.csv");
+    const saved = testInfo.outputPath(`${item}.csv`);
     await download.saveAs(saved);
-    // The file carries a UTF-8 BOM so Excel opens it without mangling accents.
     const raw = await import("node:fs/promises").then((fs) => fs.readFile(saved, "utf8"));
+    // The file carries a UTF-8 BOM so Excel opens it without mangling accents.
     expect(raw.startsWith("\ufeff")).toBe(true);
-    const csv = raw.replace(/^\ufeff/, "");
+    return { filename: download.suggestedFilename(), csv: raw.replace(/^\ufeff/, "") };
+  }
 
-    // The orders behind the totals, not the totals themselves.
+  test("exports the orders behind the figures", async ({ page }, testInfo) => {
+    await page.goto("/finances?currency=INR");
+    const { filename, csv } = await exportCsv(page, testInfo, "Orders");
+
+    expect(filename).toMatch(/^finances-INR-\d{4}-\d{2}-\d{2}-to-/);
     expect(csv.split("\r\n")[0]).toBe(
-      "Order ID,Client,Product,Status,Order date,Expected delivery,Actual delivery,Currency,Order value,Commission %,Commission,Received,Outstanding",
+      "Order ID,Client,Product,Status,Order date,Expected delivery,Actual delivery,Currency,Order value,Commission %,Commission,Received,Outstanding,Expenses,Net",
     );
     expect(csv.split("\r\n").length).toBeGreaterThan(1);
+  });
+
+  test("exports a ledger that reconciles with the passbook", async ({ page }, testInfo) => {
+    await page.goto("/finances?currency=INR");
+    const { filename, csv } = await exportCsv(page, testInfo, "Ledger");
+
+    expect(filename).toMatch(/^ledger-INR-\d{4}-\d{2}-\d{2}-to-/);
+    const lines = csv.trim().split("\r\n");
+    expect(lines[0]).toBe("Date,Type,Detail,Client,Order ID,Category,Currency,In,Out,Balance");
+
+    // The file has one row per passbook row, and its last balance is the
+    // closing balance the page prints underneath the table.
+    const passbookRows = await page
+      .getByRole("table")
+      .filter({ hasText: "Balance" })
+      .getByRole("row")
+      .count();
+    expect(lines.length - 1).toBe(passbookRows - 1); // less the header row
+
+    const lastBalance = lines[lines.length - 1].split(",").pop();
+    const closing = await page.getByText(/Closing balance/).locator("xpath=..").textContent();
+    expect(closing?.replace(/[^\d.]/g, "")).toContain(lastBalance?.replace(/[^\d.]/g, ""));
   });
 });

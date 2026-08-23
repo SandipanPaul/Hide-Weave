@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { TableLink } from "@/components/data-table/table-link";
 import { EmptyState } from "@/components/layout/empty-state";
 import { ProjectStatusBadge } from "@/components/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,8 +12,8 @@ import {
 } from "@/components/ui/table";
 
 /**
- * The dashboard's four tables. Every value arrives pre-formatted from the
- * server — these render, they do not calculate.
+ * The dashboard's tables. Every value arrives pre-formatted from the server —
+ * these render, they do not calculate.
  */
 
 function Panel({
@@ -43,62 +43,6 @@ function Panel({
         )}
       </CardContent>
     </Card>
-  );
-}
-
-export type TopClientRow = {
-  clientId: string;
-  clientName: string;
-  orders: number;
-  orderValue: string;
-  commission: string;
-  averagePercentage: string;
-};
-
-export function TopClientsTable({ rows }: { rows: TopClientRow[] }) {
-  return (
-    <Panel
-      title="Top clients by commission"
-      description="What each client earned you, and the rate they earned it at."
-      empty={rows.length === 0}
-      emptyText="No orders in this range"
-    >
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Client</TableHead>
-            <TableHead className="text-right">Orders</TableHead>
-            <TableHead className="text-right">Value routed</TableHead>
-            <TableHead className="text-right">Avg %</TableHead>
-            <TableHead className="text-right">Commission</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.clientId}>
-              <TableCell className="max-w-[22ch] truncate font-medium">
-                <Link
-                  href={`/clients/${row.clientId}`}
-                  className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {row.clientName}
-                </Link>
-              </TableCell>
-              <TableCell className="text-right tabular-nums">{row.orders}</TableCell>
-              <TableCell className="whitespace-nowrap text-right tabular-nums text-muted-foreground">
-                {row.orderValue}
-              </TableCell>
-              <TableCell className="text-right tabular-nums text-muted-foreground">
-                {row.averagePercentage}
-              </TableCell>
-              <TableCell className="whitespace-nowrap text-right font-medium tabular-nums">
-                {row.commission}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </Panel>
   );
 }
 
@@ -134,12 +78,11 @@ export function ReceivablesTable({ rows }: { rows: ReceivableRowView[] }) {
           {rows.map((row) => (
             <TableRow key={row.id}>
               <TableCell className="font-medium">
-                <Link
+                <TableLink
                   href={`/projects/${row.id}`}
-                  className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {row.orderId}
-                </Link>
+                </TableLink>
               </TableCell>
               <TableCell className="max-w-[18ch] truncate">{row.clientName}</TableCell>
               <TableCell className="whitespace-nowrap text-right tabular-nums text-muted-foreground">
@@ -192,12 +135,11 @@ export function LateDeliveriesTable({ rows }: { rows: LateRowView[] }) {
           {rows.map((row) => (
             <TableRow key={row.id}>
               <TableCell className="font-medium">
-                <Link
+                <TableLink
                   href={`/projects/${row.id}`}
-                  className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {row.orderId}
-                </Link>
+                </TableLink>
               </TableCell>
               <TableCell className="max-w-[16ch] truncate">{row.clientName}</TableCell>
               <TableCell className="max-w-[16ch] truncate">{row.product}</TableCell>
@@ -249,12 +191,11 @@ export function UpcomingSamplingsTable({ rows }: { rows: SamplingRowView[] }) {
                 {row.date}
               </TableCell>
               <TableCell className="max-w-[22ch] truncate">
-                <Link
+                <TableLink
                   href={`/clients/${row.clientId}`}
-                  className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {row.clientName}
-                </Link>
+                </TableLink>
               </TableCell>
               <TableCell className="text-muted-foreground">
                 {row.product ?? "No product noted"}

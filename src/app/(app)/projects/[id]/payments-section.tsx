@@ -1,25 +1,16 @@
 "use client";
 
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import { createPayment, deletePayment, updatePayment } from "../actions";
 import { Field } from "@/components/form/field";
 import { FormErrors } from "@/components/form/form-errors";
 import { SubmitButton } from "@/components/form/submit-button";
 import { EmptyState } from "@/components/layout/empty-state";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { useAction } from "@/components/form/use-action";
+import { RowActions } from "@/components/data-table/row-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -153,22 +144,9 @@ export function PaymentsSection({
   outstandingInput: string;
   settled: boolean;
 }) {
-  const router = useRouter();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  const remove = (id: string) => {
-    startTransition(async () => {
-      const result = await deletePayment(id);
-      if (result.ok) {
-        toast.success("Payment deleted.");
-        router.refresh();
-      } else {
-        toast.error(result.formErrors[0] ?? "That didn't work. Please try again.");
-      }
-    });
-  };
+  const { run, pending } = useAction();
 
   return (
     <Card>
@@ -250,50 +228,17 @@ export function PaymentsSection({
                         <span className="ml-2 text-xs">{payment.notes}</span>
                       ) : null}
                     </TableCell>
-                    <TableCell className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        disabled={isPending}
-                        aria-label={`Edit payment of ${payment.amountDisplay} on ${payment.displayDate}`}
-                        onClick={() => setEditingId(payment.id)}
-                      >
-                        <Pencil className="size-4" aria-hidden />
-                      </Button>
-
-                      <AlertDialog>
-                        <AlertDialogTrigger
-                          render={
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              disabled={isPending}
-                              aria-label={`Delete payment of ${payment.amountDisplay} on ${payment.displayDate}`}
-                            />
-                          }
-                        >
-                          {isPending ? (
-                            <Loader2 className="size-4 animate-spin" aria-hidden />
-                          ) : (
-                            <Trash2 className="size-4" aria-hidden />
-                          )}
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete this payment?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              {payment.amountDisplay} received on {payment.displayDate} will be
-                              removed, and the balance owed will go back up.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Keep it</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => remove(payment.id)}>
-                              Delete payment
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                    <TableCell>
+                      <RowActions
+                        pending={pending}
+                        editLabel={`Edit payment of ${payment.amountDisplay} on ${payment.displayDate}`}
+                        onEdit={() => setEditingId(payment.id)}
+                        deleteLabel={`Delete payment of ${payment.amountDisplay} on ${payment.displayDate}`}
+                        confirmTitle="Delete this payment?"
+                        confirmDescription={`${payment.amountDisplay} received on ${payment.displayDate} will be removed, and the balance owed will go back up.`}
+                        confirmLabel="Delete payment"
+                        onDelete={() => run(() => deletePayment(payment.id), "Payment deleted.")}
+                      />
                     </TableCell>
                   </TableRow>
                   ),

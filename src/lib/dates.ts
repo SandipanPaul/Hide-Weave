@@ -27,11 +27,6 @@ export function formatDateOnly(date: Date | null | undefined, locale = "en-IN"):
   }).format(date);
 }
 
-/** Formats a true timestamp (createdAt, updatedAt) in the viewer's local zone. */
-export function formatTimestamp(date: Date | null | undefined, locale = "en-IN"): string {
-  if (!date) return "—";
-  return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(date);
-}
 
 /** Today at UTC midnight — the reference point for "upcoming" vs "past". */
 export function todayUtc(now = new Date()): Date {

@@ -34,11 +34,6 @@ export const PROJECT_STATUSES = [
 ] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
-/** Statuses whose order value and commission count toward business totals. */
-export const ACTIVE_PROJECT_STATUSES = PROJECT_STATUSES.filter(
-  (s) => s !== "CANCELLED",
-) as readonly ProjectStatus[];
-
 /** Statuses where the goods have landed, so commission is firmly owed. */
 export const SETTLED_PROJECT_STATUSES: readonly ProjectStatus[] = ["DELIVERED", "CLOSED"];
 
@@ -76,3 +71,48 @@ export const OPEN_PROJECT_STATUSES: readonly ProjectStatus[] = [
   "SHIPPED",
   "DELIVERED",
 ];
+
+/**
+ * What an expense was for. Offered as a picker, stored as a string, and
+ * optional — a spend nobody has categorised is still a real spend, and
+ * refusing to record it until it is filed correctly loses the number.
+ */
+export const EXPENSE_CATEGORIES = [
+  "TRAVEL",
+  "SAMPLES",
+  "SHIPPING",
+  "INSPECTION",
+  "ENTERTAINMENT",
+  "OFFICE",
+  "FEES",
+  "OTHER",
+] as const;
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+
+export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
+  TRAVEL: "Travel",
+  SAMPLES: "Samples",
+  SHIPPING: "Shipping & courier",
+  INSPECTION: "Inspection & testing",
+  ENTERTAINMENT: "Client entertainment",
+  OFFICE: "Office & admin",
+  FEES: "Bank & statutory fees",
+  OTHER: "Other",
+};
+
+/**
+ * What one row of the ledger is.
+ *
+ * COMMISSION is a payment received against an order. RETAINER is a month a
+ * client's retainer charged, derived from its schedule. EXPENSE is money out.
+ * They are never added into one figure without saying so — a retainer is not
+ * commission earned.
+ */
+export const LEDGER_KINDS = ["COMMISSION", "RETAINER", "EXPENSE"] as const;
+export type LedgerKind = (typeof LEDGER_KINDS)[number];
+
+export const LEDGER_KIND_LABELS: Record<LedgerKind, string> = {
+  COMMISSION: "Commission",
+  RETAINER: "Retainer",
+  EXPENSE: "Expense",
+};

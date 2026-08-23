@@ -17,7 +17,6 @@ export const EXPORTER_SORT_COLUMNS = [
   "projects",
 ] as const;
 
-export type ExporterSortColumn = (typeof EXPORTER_SORT_COLUMNS)[number];
 
 export type ExporterListRow = {
   id: string;

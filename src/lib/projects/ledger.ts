@@ -24,15 +24,27 @@ export type ProjectLedger = {
   settled: boolean;
   /** For a progress bar only. Never feed this back into money maths. */
   percentPaid: number;
+  /** What this order cost the agent to service. */
+  expenses: bigint;
+  /**
+   * Commission less expenses — what the order was actually worth. Can be
+   * negative: an order can cost more to service than it earned, and hiding
+   * that would be the one number worth knowing.
+   */
+  net: bigint;
 };
 
 export function projectLedger(
   project: { orderValue: bigint; commissionPercentage: number },
   payments: ReadonlyArray<{ amount: bigint }>,
+  expenseRows: ReadonlyArray<{ amount: bigint }> = [],
 ): ProjectLedger {
   const commission = computeCommission(project.orderValue, project.commissionPercentage);
   const paid = sumMinor(payments.map((payment) => payment.amount));
   const difference = commission - paid;
+  // Expenses are the agent's own costs, so they reduce what the order earned
+  // without changing what the client owes: `outstanding` is untouched by them.
+  const expenses = sumMinor(expenseRows.map((expense) => expense.amount));
 
   return {
     commission,
@@ -43,6 +55,8 @@ export function projectLedger(
     overpaid: difference < 0n ? -difference : 0n,
     settled: difference <= 0n,
     percentPaid: commission === 0n ? (paid > 0n ? 100 : 0) : percentOf(paid, commission),
+    expenses,
+    net: commission - expenses,
   };
 }
 

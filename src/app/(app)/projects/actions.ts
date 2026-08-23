@@ -147,13 +147,21 @@ export async function updateProject(
     return failure("Another project already uses this order ID.", "orderId");
   }
 
-  // Payments are held in the project's currency, so changing it would silently
-  // reinterpret every amount already recorded.
+  // Payments and expenses are both held in the project's currency, so changing
+  // it would silently reinterpret every amount already recorded.
   if (parsed.data.currency !== existing.currency) {
-    const payments = await prisma.payment.count({ where: { projectId: id, ...notDeleted } });
-    if (payments > 0) {
+    const [payments, expenses] = await Promise.all([
+      prisma.payment.count({ where: { projectId: id, ...notDeleted } }),
+      prisma.expense.count({ where: { projectId: id, ...notDeleted } }),
+    ]);
+    const blocking = [
+      payments > 0 ? `${payments} payment${payments === 1 ? "" : "s"}` : null,
+      expenses > 0 ? `${expenses} expense${expenses === 1 ? "" : "s"}` : null,
+    ].filter(Boolean);
+
+    if (blocking.length > 0) {
       return failure(
-        `This project already has ${payments} payment${payments === 1 ? "" : "s"} recorded in ${
+        `This project already has ${blocking.join(" and ")} recorded in ${
           existing.currency
         }. Delete them before changing the currency.`,
         "currency",
@@ -184,8 +192,13 @@ export async function updateProject(
 }
 
 /**
- * Soft-deletes a project along with its payments — the schema's cascade only
- * fires on a real delete, which never happens here.
+ * Soft-deletes a project, and only the project.
+ *
+ * Its payments and expenses are deliberately left alone. The ledger is a
+ * record of money that moved, and money does not un-move because the order it
+ * was against was removed from a list. Deleting a project takes it out of the
+ * live business — its value, its commission, its receivables — while the cash
+ * it took in and the costs it ran up stay in the passbook where they happened.
  */
 export async function deleteProject(id: string): Promise<ActionResult> {
   const project = await prisma.project.findFirst({
@@ -194,13 +207,10 @@ export async function deleteProject(id: string): Promise<ActionResult> {
   });
   if (!project) return failure("This project no longer exists.");
 
-  const deletedAt = new Date();
-  await prisma.$transaction([
-    prisma.payment.updateMany({ where: { projectId: id, ...notDeleted }, data: { deletedAt } }),
-    prisma.project.update({ where: { id }, data: { deletedAt } }),
-  ]);
+  await prisma.project.update({ where: { id }, data: { deletedAt: new Date() } });
 
   revalidateProject(undefined, project.clientId);
+  revalidatePath("/finances");
   redirect("/projects");
 }
 
@@ -237,7 +247,8 @@ export async function createPayment(
 
   const { paidOn, ...rest } = parsed.data;
   const payment = await prisma.payment.create({
-    data: { ...rest, paidOn: dateOnlyToUtc(paidOn) },
+    // A payment inherits its order's currency.
+    data: { ...rest, currency: project.currency, paidOn: dateOnlyToUtc(paidOn) },
   });
 
   revalidateProject(projectId, project.clientId);

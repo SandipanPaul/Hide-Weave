@@ -31,6 +31,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export type ClientDetailView = ClientFormValues & {
   id: string;
+  /** The reference quoted in emails. Read-only — the app issues it. */
+  code: string | null;
   retainerDisplay: string | null;
 };
 
@@ -133,6 +135,13 @@ export function ClientDetailsPanel({ client }: { client: ClientDetailView }) {
           />
         ) : (
           <DetailList>
+            <DetailRow label="Client ID">
+              {client.code ? (
+                <span className="font-mono">{client.code}</span>
+              ) : (
+                DASH
+              )}
+            </DetailRow>
             <DetailRow label="Status">
               <ClientStatusBadge status={client.status} />
             </DetailRow>

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   clientInputSchema,
   formatZodError,
+  makeExpenseInputSchema,
   projectInputSchema,
   samplingInputSchema,
 } from "./schemas";
@@ -268,5 +269,92 @@ describe("client status", () => {
 
   it("refuses a status the app does not know", () => {
     expect(clientInputSchema.safeParse(formLike({ status: "PENDING" })).success).toBe(false);
+  });
+});
+
+describe("expense input", () => {
+  const expenseForm = (overrides: Record<string, unknown> = {}) => ({
+    projectId: null,
+    description: "Courier to Chennai",
+    amount: "2500",
+    incurredOn: "2026-03-12",
+    category: null,
+    notes: null,
+    ...overrides,
+  });
+
+  const parse = (overrides: Record<string, unknown> = {}, currency = "INR") =>
+    makeExpenseInputSchema(currency).safeParse(expenseForm(overrides));
+
+  it("parses the amount into minor units of the currency it was given", () => {
+    const inr = parse();
+    expect(inr.success && inr.data.amount).toBe(2_500_00n);
+
+    // Yen has no minor units, so the same digits mean a different number.
+    const jpy = parse({ amount: "2500" }, "JPY");
+    expect(jpy.success && jpy.data.amount).toBe(2500n);
+  });
+
+  it("requires a description — an unexplained spend is not a record", () => {
+    expect(parse({ description: "" }).success).toBe(false);
+    expect(parse({ description: "   " }).success).toBe(false);
+  });
+
+  it("requires an amount and a date", () => {
+    expect(parse({ amount: "" }).success).toBe(false);
+    expect(parse({ incurredOn: "" }).success).toBe(false);
+    expect(parse({ incurredOn: "2026-02-31" }).success).toBe(false);
+  });
+
+  it("accepts an expense with no project — overheads have no order", () => {
+    const result = parse({ projectId: null });
+    expect(result.success && result.data.projectId).toBeUndefined();
+  });
+
+  it("leaves the category optional, and refuses one it does not know", () => {
+    expect(parse({ category: null }).success).toBe(true);
+    expect(parse({ category: "SHIPPING" }).success).toBe(true);
+    expect(parse({ category: "BRIBES" }).success).toBe(false);
+  });
+
+  it("rejects more decimal places than the currency has", () => {
+    expect(parse({ amount: "100.005" }).success).toBe(false);
+  });
+});
+
+describe("order value", () => {
+  const orderForm = (orderValue: string) => ({
+    clientId: "c1",
+    exporters: [],
+    product: "Leather satchels",
+    orderId: "ORD-1",
+    quantity: "10",
+    unit: null,
+    orderValue,
+    commissionPercentage: "5",
+    currency: "INR",
+    status: null,
+    orderDate: "2026-01-01",
+    expectedDelivery: null,
+    actualDelivery: null,
+    notes: null,
+  });
+
+  it("accepts a real consignment value", () => {
+    const result = projectInputSchema.safeParse(orderForm("100000"));
+    expect(result.success && result.data.orderValue).toBe(1_000_000_0n);
+  });
+
+  it("refuses a negative order value", () => {
+    // Left unchecked this produced negative commission, which then flowed into
+    // every total on the dashboard.
+    const result = projectInputSchema.safeParse(orderForm("-100000"));
+    expect(result.success).toBe(false);
+    expect(result.success === false && result.error.issues[0].message).toMatch(/greater than zero/);
+  });
+
+  it("refuses a zero order value", () => {
+    expect(projectInputSchema.safeParse(orderForm("0")).success).toBe(false);
+    expect(projectInputSchema.safeParse(orderForm("0.00")).success).toBe(false);
   });
 });

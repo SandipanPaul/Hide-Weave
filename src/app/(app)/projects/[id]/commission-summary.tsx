@@ -14,6 +14,8 @@ export function CommissionSummary({
   overpaidDisplay,
   percentPaid,
   settled,
+  expensesDisplay,
+  netDisplay,
 }: {
   commissionDisplay: string;
   orderValueDisplay: string;
@@ -23,6 +25,10 @@ export function CommissionSummary({
   overpaidDisplay: string | null;
   percentPaid: number;
   settled: boolean;
+  /** Null when nothing has been spent on this order. */
+  expensesDisplay: string | null;
+  /** Commission less expenses. */
+  netDisplay: string;
 }) {
   // A part payment past 100% would otherwise run the bar off its track.
   const barWidth = Math.min(100, Math.max(0, percentPaid));
@@ -39,6 +45,12 @@ export function CommissionSummary({
             <p className="mt-1 text-sm text-muted-foreground">
               {commissionPercentage}% of {orderValueDisplay} routed
             </p>
+            {expensesDisplay ? (
+              <p className="mt-1 text-sm text-muted-foreground">
+                Less {expensesDisplay} of expenses —{" "}
+                <span className="font-medium text-foreground tabular-nums">{netDisplay}</span> net
+              </p>
+            ) : null}
           </div>
 
           <dl className="flex gap-8 text-sm">

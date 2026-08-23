@@ -1,5 +1,7 @@
 "use client";
 
+import { LINK_CLASS } from "@/components/ui/link-styles";
+import { cn } from "@/lib/utils";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -131,7 +133,7 @@ export function ProjectDetailsPanel({
             <DetailRow label="Client">
               <Link
                 href={`/clients/${project.clientId}`}
-                className="underline-offset-4 hover:underline"
+                className={LINK_CLASS}
               >
                 {project.clientName}
               </Link>
@@ -145,7 +147,7 @@ export function ProjectDetailsPanel({
                     <li key={maker.id} className="flex justify-between gap-3">
                       <Link
                         href={`/exporters/${maker.id}`}
-                        className="min-w-0 truncate underline-offset-4 hover:underline"
+                        className={cn("min-w-0 truncate", LINK_CLASS)}
                       >
                         {maker.name}
                       </Link>

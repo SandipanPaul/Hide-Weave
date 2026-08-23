@@ -8,15 +8,15 @@ import { cn } from "@/lib/utils";
 /**
  * Ordered by how often each tab is opened, not by entity hierarchy: projects
  * are the daily unit of work, clients and exporters are master data consulted
- * while recording them, and economics is a periodic review of what it all
- * earned. Left to right: the work, who it is for, who supplies it, what it
- * earned.
+ * while recording them, and finances is a periodic review of what it all
+ * earned and cost. Left to right: the work, who it is for, who supplies it,
+ * what came of it.
  */
 const TABS = [
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/clients", label: "Clients", icon: Users },
   { href: "/exporters", label: "Exporters", icon: Building2 },
-  { href: "/economics", label: "Economics", icon: BarChart3 },
+  { href: "/finances", label: "Finances", icon: BarChart3 },
 ] as const;
 
 export function MainNav() {

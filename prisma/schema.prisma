@@ -23,6 +23,15 @@ datasource db {
 
 model Client {
   id            String  @id @default(cuid())
+  /// Short human-readable reference, e.g. "HW-0007", for quoting in emails and
+  /// invoices. The cuid `id` is what the database joins on; this is what a
+  /// person types and reads.
+  ///
+  /// Nullable so the column could be added without rebuilding a table half the
+  /// schema points at. Every row has one — they were backfilled, and every
+  /// write sets it — and the unique index means a blank can never be
+  /// duplicated into a second row.
+  code          String? @unique
   name          String
   address       String?
   /// ISO 3166-1 alpha-2 code, e.g. "IN". Names are derived for display, so the
@@ -45,6 +54,11 @@ model Client {
 
   samplings ClientSampling[]
   projects  Project[]
+  /// Retainer fees this client has paid, logged by hand from their page.
+  retainers RetainerReceipt[]
+  /// Spends made for this client with no order behind them — a sample sent to
+  /// a prospect, a trip to visit them.
+  expenses  Expense[]
   /// Phone numbers and email addresses, ordered. The first of each kind is
   /// treated as the primary one for lists and sorting.
   contacts  ClientContact[]
@@ -179,6 +193,7 @@ model Project {
   deletedAt DateTime?
 
   payments Payment[]
+  expenses Expense[]
 
   @@index([clientId])
   @@index([deletedAt])
@@ -188,16 +203,21 @@ model Project {
   @@index([currency])
 }
 
+/// Commission received against one order.
+///
+/// Payments settle the agent's commission, never the order value. A retainer
+/// fee is not one of these — see RetainerReceipt.
 model Payment {
   id        String  @id @default(cuid())
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  /// Amount in minor units, in the parent project's currency. Payments settle
-  /// the agent's commission, not the order value.
-  amount BigInt
-  paidOn DateTime
-  method String?
+  /// Amount in minor units, in the parent project's currency, which is copied
+  /// here so a payment can be filtered by currency without a join.
+  amount   BigInt
+  currency String   @default("INR")
+  paidOn   DateTime
+  method   String?
 
   notes     String?
   createdAt DateTime  @default(now())
@@ -207,4 +227,80 @@ model Payment {
   @@index([projectId])
   @@index([deletedAt])
   @@index([paidOn])
+  @@index([currency])
+}
+
+/// Money the agent spent, as opposed to money they earned.
+///
+/// Attached to a project when it was spent on that order (courier for a
+/// sample, a factory visit); attached to nothing when it is general overhead
+/// the business carries. Both kinds are expenses and both are deducted from
+/// earnings — `projectId` only records what the spend was *for*.
+///
+/// Expenses never touch commission or outstanding: what a client owes is
+/// unaffected by what it cost the agent to serve them. They are deducted from
+/// earnings, not from receivables.
+model Expense {
+  id        String   @id @default(cuid())
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// Who the spend was for, when there is no order to hang it on — a sample
+  /// posted to a prospect, a trip to visit someone who has not ordered yet.
+  /// Independent of `projectId`: an expense may have both, either or neither.
+  clientId  String?
+  client    Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  /// Amount in minor units. Held in the parent project's currency when there
+  /// is one, so an expense can never be denominated differently from the order
+  /// it belongs to.
+  amount     BigInt
+  currency   String   @default("INR")
+  incurredOn DateTime
+  /// Free text, offered as a list — see EXPENSE_CATEGORIES in src/lib/enums.ts.
+  category   String?
+  /// What it was, in the user's own words. The category groups; this explains.
+  description String
+
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([projectId])
+  @@index([clientId])
+  @@index([deletedAt])
+  @@index([incurredOn])
+  @@index([currency])
+}
+
+
+
+
+/// One retainer fee, received.
+///
+/// Deliberately a record of a payment rather than a schedule: the fee is only
+/// income once the client has actually paid it, and the person who knows that
+/// is the agent. `Client.fixedMonthly` is the rate; each of these is one
+/// instance of it arriving, logged with a button on the client's page.
+///
+/// `amount` is captured at the moment it is logged, so changing a client's
+/// rate later never rewrites what was already received.
+model RetainerReceipt {
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  amount   BigInt
+  currency String
+  paidOn   DateTime
+
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([clientId])
+  @@index([deletedAt])
+  @@index([paidOn])
+  @@index([currency])
 }

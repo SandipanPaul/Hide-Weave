@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { TableLink } from "@/components/data-table/table-link";
 import { FolderKanban } from "lucide-react";
 import { EmptyState } from "@/components/layout/empty-state";
 import { ProjectStatusBadge } from "@/components/status-badge";
@@ -96,12 +96,11 @@ export function ClientProjects({ projects }: { projects: ProjectRow[] }) {
                 {projects.map((project) => (
                   <TableRow key={project.id}>
                     <TableCell className="font-medium">
-                      <Link
+                      <TableLink
                         href={`/projects/${project.id}`}
-                        className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         {project.orderId}
-                      </Link>
+                      </TableLink>
                     </TableCell>
                     <TableCell>{project.product}</TableCell>
                     <TableCell className="max-w-[18ch] truncate text-muted-foreground">

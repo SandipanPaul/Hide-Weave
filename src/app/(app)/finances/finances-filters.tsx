@@ -17,7 +17,7 @@ import {
  * The date range and currency every figure on this page respects, held in the
  * URL so a particular view can be bookmarked and shared.
  */
-export function EconomicsFilters({
+export function FinancesFilters({
   from,
   to,
   currency,
@@ -39,7 +39,7 @@ export function EconomicsFilters({
     if (value) params.set(key, value);
     else params.delete(key);
     const query = params.toString();
-    router.push(query ? `/economics?${query}` : "/economics", { scroll: false });
+    router.push(query ? `/finances?${query}` : "/finances", { scroll: false });
   };
 
   return (
@@ -94,7 +94,7 @@ export function EconomicsFilters({
           variant="ghost"
           size="sm"
           className="mt-[1.625rem] text-muted-foreground"
-          onClick={() => router.push("/economics", { scroll: false })}
+          onClick={() => router.push("/finances", { scroll: false })}
         >
           <RotateCcw className="size-4" aria-hidden />
           Last 12 months

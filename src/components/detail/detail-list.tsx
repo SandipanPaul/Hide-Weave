@@ -1,3 +1,4 @@
+import { LINK_CLASS } from "@/components/ui/link-styles";
 /**
  * The read view of a single record: a label column and a value column, one row
  * per field. Shared by the client, project and exporter detail pages so all
@@ -24,7 +25,8 @@ export function DetailRow({ label, children }: { label: string; children: React.
   );
 }
 
-const LINK = "underline-offset-4 hover:underline";
+// Shared with every other link in the app — see LINK_CLASS.
+const LINK = LINK_CLASS;
 
 /**
  * An email is one unbreakable token to a browser, so a long one needs to be

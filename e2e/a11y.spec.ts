@@ -128,7 +128,7 @@ async function findProblems(page: Page, scope = "body"): Promise<Finding[]> {
   }, scope);
 }
 
-const PAGES = ["/projects", "/clients", "/exporters", "/economics"];
+const PAGES = ["/projects", "/clients", "/exporters", "/finances"];
 
 test.describe("accessibility", () => {
   test.beforeEach(async ({ page }) => {

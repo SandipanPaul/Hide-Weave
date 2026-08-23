@@ -5,7 +5,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  ComposedChart,
   Legend,
   Line,
   LineChart,
@@ -29,14 +28,8 @@ import { formatMoney, majorNumberToMinor } from "@/lib/money";
  * were computed by the tested aggregates.
  */
 
-export type MonthlyPoint = {
-  month: string;
-  label: string;
-  orderValue: number;
-  commission: number;
-};
 export type CashPoint = { month: string; label: string; amount: number };
-export type RankedPoint = { label: string; commission: number };
+export type ExpensePoint = { label: string; amount: number };
 export type StatusPoint = { label: string; count: number };
 
 /** Greys, matching the app's chart tokens, plus one accent for the donut. */
@@ -143,64 +136,6 @@ function tooltipStyle() {
   };
 }
 
-export function MonthlyChart({
-  points,
-  currency,
-}: {
-  points: MonthlyPoint[];
-  currency: string;
-}) {
-  return (
-    <ChartCard
-      title="Order value and commission by month"
-      // Two axes on purpose: commission is a small percentage of order value,
-      // so a shared scale would flatten it into the baseline.
-      description="Separate scales — commission is a fraction of order value, and would otherwise be invisible."
-      empty={points.every((point) => point.orderValue === 0)}
-    >
-      <ComposedChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
-        <CartesianGrid stroke="var(--border)" vertical={false} />
-        <XAxis dataKey="label" tickLine={false} axisLine={false} {...axis} />
-        <YAxis
-          yAxisId="value"
-          tickLine={false}
-          axisLine={false}
-          width={70}
-          tickFormatter={moneyFormatter(currency, true)}
-          {...axis}
-        />
-        <YAxis
-          yAxisId="commission"
-          orientation="right"
-          tickLine={false}
-          axisLine={false}
-          width={70}
-          tickFormatter={moneyFormatter(currency, true)}
-          {...axis}
-        />
-        <Tooltip formatter={moneyFormatter(currency)} {...tooltipStyle()} />
-        <Legend wrapperStyle={{ fontSize: "0.75rem" }} formatter={legendLabel} />
-        <Bar
-          yAxisId="value"
-          dataKey="orderValue"
-          name="Order value routed"
-          fill="var(--chart-2)"
-          radius={[3, 3, 0, 0]}
-        />
-        <Line
-          yAxisId="commission"
-          type="linear"
-          dataKey="commission"
-          name="Commission earned"
-          stroke="var(--chart-5)"
-          strokeWidth={2}
-          dot={false}
-        />
-      </ComposedChart>
-    </ChartCard>
-  );
-}
-
 export function CashChart({
   points,
   currency,
@@ -238,23 +173,30 @@ export function CashChart({
   );
 }
 
-export function RankedChart({
-  title,
-  description,
+/**
+ * Where the money went, by category, biggest first.
+ *
+ * A horizontal bar because the labels are words rather than dates — a category
+ * axis running along the bottom would either truncate them or turn them
+ * sideways, and neither reads.
+ */
+export function ExpensesChart({
   points,
   currency,
 }: {
-  title: string;
-  description?: string;
-  points: RankedPoint[];
+  points: ExpensePoint[];
   currency: string;
 }) {
   return (
-    <ChartCard title={title} description={description} empty={points.length === 0}>
+    <ChartCard
+      title="Expenses by category"
+      description="What you spent in this range, grouped by what it was for."
+      empty={points.length === 0}
+    >
       <BarChart
         data={points}
         layout="vertical"
-        margin={{ top: 4, right: 16, bottom: 4, left: 8 }}
+        margin={{ top: 8, right: 16, bottom: 0, left: 8 }}
       >
         <CartesianGrid stroke="var(--border)" horizontal={false} />
         <XAxis
@@ -267,13 +209,17 @@ export function RankedChart({
         <YAxis
           type="category"
           dataKey="label"
-          width={140}
           tickLine={false}
           axisLine={false}
+          width={130}
           {...axis}
         />
-        <Tooltip formatter={moneyFormatter(currency)} {...tooltipStyle()} />
-        <Bar dataKey="commission" name="Commission" fill="var(--chart-2)" radius={[0, 3, 3, 0]} />
+        <Tooltip
+          formatter={moneyFormatter(currency)}
+          cursor={{ fill: "var(--muted)" }}
+          {...tooltipStyle()}
+        />
+        <Bar dataKey="amount" name="Spent" fill="var(--chart-3)" radius={[0, 4, 4, 0]} />
       </BarChart>
     </ChartCard>
   );

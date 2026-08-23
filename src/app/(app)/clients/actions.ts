@@ -3,10 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { dateOnlyToUtc } from "@/lib/dates";
+import { dateOnlyToUtc, todayUtc } from "@/lib/dates";
 import { notDeleted, prisma } from "@/lib/db";
 import { SAMPLING_STATUSES } from "@/lib/enums";
-import { contactRows, findClientConflict } from "@/lib/clients/queries";
+import { contactRows, findClientConflict, reserveClientCode } from "@/lib/clients/queries";
 import {
   clientInputSchema,
   failure,
@@ -73,7 +73,11 @@ export async function createClient(
   try {
     const { phones, emails, ...fields } = parsed.data;
     const client = await prisma.client.create({
-      data: { ...fields, contacts: { create: contactRows(phones, emails) } },
+      data: {
+        ...fields,
+        code: await reserveClientCode(),
+        contacts: { create: contactRows(phones, emails) },
+      },
     });
     revalidateClients();
     return { ok: true, data: { id: client.id } };
@@ -111,6 +115,7 @@ export async function updateClient(
         data: { ...fields, contacts: { create: contactRows(phones, emails) } },
       }),
     ]);
+
     revalidateClients(id);
     return { ok: true, data: { id } };
   } catch {
@@ -119,8 +124,10 @@ export async function updateClient(
 }
 
 /**
- * Soft-deletes a client and its samplings together — the schema's cascade only
- * fires on a real delete, which never happens here.
+ * Soft-deletes a client and its samplings.
+ *
+ * Retainer fees already received are kept: they are money that moved, and the
+ * ledger records that regardless of whether the client is still on the books.
  *
  * A client with live projects is refused rather than quietly taking those
  * projects (and their commission history) out of every total.
@@ -147,6 +154,7 @@ export async function deleteClient(id: string): Promise<ActionResult> {
   ]);
 
   revalidateClients();
+  revalidatePath("/finances");
   redirect("/clients");
 }
 
@@ -231,4 +239,60 @@ export async function deleteSampling(id: string): Promise<ActionResult> {
   await prisma.clientSampling.update({ where: { id }, data: { deletedAt: new Date() } });
   revalidateClients(existing.clientId);
   return { ok: true, data: undefined };
+}
+
+// -------------------------------------------------------------- Retainer
+
+/**
+ * Logging a retainer fee that has been received.
+ *
+ * The fee is a rate on the client (`fixedMonthly`); this records one instance
+ * of it arriving. Deliberately manual: only the agent knows whether a client
+ * actually paid, and a schedule that assumed they had would put money in the
+ * ledger that nobody had sent.
+ *
+ * The amount is captured now rather than read live, so changing the rate later
+ * never rewrites what was already received.
+ */
+export async function recordRetainerPaid(clientId: string): Promise<ActionResult> {
+  const client = await prisma.client.findFirst({
+    where: { id: clientId, ...notDeleted },
+    select: { id: true, fixedMonthly: true, currency: true },
+  });
+  if (!client) return failure("This client no longer exists.");
+
+  if (client.fixedMonthly === null || client.fixedMonthly <= 0n) {
+    return failure("Set a monthly retainer amount on this client first.");
+  }
+
+  await prisma.retainerReceipt.create({
+    data: {
+      clientId,
+      amount: client.fixedMonthly,
+      currency: client.currency,
+      paidOn: todayUtc(),
+    },
+  });
+
+  revalidateRetainer(clientId);
+  return { ok: true, data: undefined };
+}
+
+/** Removes a retainer fee logged by mistake. */
+export async function deleteRetainerPaid(id: string): Promise<ActionResult> {
+  const receipt = await prisma.retainerReceipt.findFirst({
+    where: { id, ...notDeleted },
+    select: { id: true, clientId: true },
+  });
+  if (!receipt) return failure("This retainer fee no longer exists.");
+
+  await prisma.retainerReceipt.update({ where: { id }, data: { deletedAt: new Date() } });
+  revalidateRetainer(receipt.clientId);
+  return { ok: true, data: undefined };
+}
+
+/** A retainer fee shows on the client's page and in the ledger. */
+function revalidateRetainer(clientId: string) {
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/finances");
 }

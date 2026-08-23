@@ -1,6 +1,7 @@
 import { emailKey } from "@/lib/contacts";
 import { foldCase } from "@/lib/keys";
 import { resolveCountry } from "@/lib/countries";
+import { nextClientCode } from "./code";
 import { notDeleted, prisma, type Db } from "@/lib/db";
 import { todayUtc } from "@/lib/dates";
 import { OPEN_PROJECT_STATUSES, type ClientStatus } from "@/lib/enums";
@@ -21,7 +22,6 @@ export const CLIENT_SORT_COLUMNS = [
   "nextSampling",
 ] as const;
 
-export type ClientSortColumn = (typeof CLIENT_SORT_COLUMNS)[number];
 
 /**
  * Columns that are not plain fields on the Client row: two come from
@@ -31,6 +31,8 @@ const COMPUTED_SORTS = new Set<string>(["openProjects", "nextSampling", "phone",
 
 export type ClientListRow = {
   id: string;
+  /** The reference quoted in emails. Null only if a row predates the column. */
+  code: string | null;
   name: string;
   address: string | null;
   country: string | null;
@@ -87,6 +89,9 @@ function searchFilter(q: string) {
   return {
     OR: [
       { name: { contains: q } },
+      // The reference quoted in emails, so a search can start from a subject
+      // line. Matched loosely: "42" finds HW-0042 as readily as the full code.
+      { code: { contains: q.trim().toUpperCase() } },
       { contactPerson: { contains: q } },
       { address: { contains: q } },
       // Any of the client's phone numbers or addresses, not just the first.
@@ -163,6 +168,7 @@ export async function getClientsPage(
 
   const select = {
     id: true,
+    code: true,
     name: true,
     address: true,
     country: true,
@@ -172,6 +178,7 @@ export async function getClientsPage(
 
   let clients: Array<{
     id: string;
+    code: string | null;
     name: string;
     address: string | null;
     country: string | null;
@@ -186,7 +193,7 @@ export async function getClientsPage(
     // The id list is small (one row per client) even on a large dataset.
     const candidates = await prisma.client.findMany({
       where,
-      select: { id: true, name: true, contacts: CONTACTS_SELECT },
+      select: { id: true, code: true, name: true, contacts: CONTACTS_SELECT },
     });
     aggregates = await loadAggregates(candidates.map((c) => c.id));
 
@@ -240,6 +247,27 @@ export async function getClient(id: string) {
   return prisma.client.findFirst({
     where: { id, ...notDeleted },
     include: { contacts: CONTACTS_SELECT },
+  });
+}
+
+/**
+ * The next client reference to issue.
+ *
+ * Reads the highest code rather than counting rows, so a deleted client never
+ * frees its number for someone else — see nextClientCode. Takes an optional
+ * transaction so it can be read inside the same one that writes the client.
+ */
+export async function reserveClientCode(db: Db = prisma): Promise<string> {
+  // Soft-deleted clients included deliberately: their codes are still spent.
+  const rows = await db.client.findMany({ select: { code: true } });
+  return nextClientCode(rows.map((row) => row.code));
+}
+
+/** Every retainer fee this client has paid, newest first. */
+export async function getClientRetainerReceipts(clientId: string) {
+  return prisma.retainerReceipt.findMany({
+    where: { clientId, ...notDeleted },
+    orderBy: { paidOn: "desc" },
   });
 }
 

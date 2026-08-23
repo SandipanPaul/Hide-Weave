@@ -2,10 +2,17 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ClientDetailsPanel, type ClientDetailView } from "./client-details-panel";
 import { ClientProjects } from "./client-projects";
+import { RetainerSection, type RetainerReceiptView } from "./retainer-section";
 import { SamplingsSection, type SamplingView } from "./samplings-section";
 import { BackLink } from "@/components/layout/back-link";
 import { PageHeader } from "@/components/layout/page-header";
-import { getClient, getClientProjects, getClientSamplings, groupContacts } from "@/lib/clients/queries";
+import {
+  getClient,
+  getClientProjects,
+  getClientRetainerReceipts,
+  getClientSamplings,
+  groupContacts,
+} from "@/lib/clients/queries";
 import { formatDateOnly, todayUtc, utcToDateOnly } from "@/lib/dates";
 import { countryName } from "@/lib/countries";
 import type { SamplingStatus } from "@/lib/enums";
@@ -26,9 +33,10 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const client = await getClient(id);
   if (!client) notFound();
 
-  const [samplings, projects] = await Promise.all([
+  const [samplings, projects, retainerReceipts] = await Promise.all([
     getClientSamplings(id),
     getClientProjects(id),
+    getClientRetainerReceipts(id),
   ]);
 
   const today = todayUtc();
@@ -54,6 +62,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
 
   const detail: ClientDetailView = {
     id: client.id,
+    code: client.code,
     name: client.name,
     address: client.address ?? "",
     // The form shows the readable name; the resolver turns it back into a code.
@@ -74,19 +83,45 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         : `${formatMoney(client.fixedMonthly, client.currency)} / month`,
   };
 
+  const retainerViews: RetainerReceiptView[] = retainerReceipts.map((receipt) => ({
+    id: receipt.id,
+    amountDisplay: formatMoney(receipt.amount, receipt.currency),
+    displayDate: formatDateOnly(receipt.paidOn),
+  }));
+  const retainerTotal = retainerReceipts.reduce((total, r) => total + r.amount, 0n);
+
   return (
     <>
       <BackLink href="/clients">All clients</BackLink>
 
       <PageHeader
         title={client.name}
-        description={client.contactPerson ? `Contact: ${client.contactPerson}` : undefined}
+        description={
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {client.code ? (
+              <span className="rounded border bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
+                {client.code}
+              </span>
+            ) : null}
+            {client.contactPerson ? <span>Contact: {client.contactPerson}</span> : null}
+          </span>
+        }
       />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:items-start">
         <ClientDetailsPanel client={detail} />
 
         <div className="space-y-6">
+          <RetainerSection
+            clientId={client.id}
+            rateDisplay={
+              client.fixedMonthly === null
+                ? null
+                : formatMoney(client.fixedMonthly, client.currency)
+            }
+            receipts={retainerViews}
+            totalDisplay={formatMoney(retainerTotal, client.currency)}
+          />
           <SamplingsSection clientId={client.id} upcoming={upcoming} past={past} />
           <ClientProjects projects={projects} />
         </div>

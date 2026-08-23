@@ -30,10 +30,27 @@ export function cleanupE2ERows(): number {
         WHERE projectId IN (SELECT id FROM Project WHERE orderId LIKE 'E2E-%')`,
     ).run();
     db.prepare(
+      `DELETE FROM Expense
+        WHERE projectId IN (SELECT id FROM Project WHERE orderId LIKE 'E2E-%')`,
+    ).run();
+    db.prepare(
       `DELETE FROM ProjectExporter
         WHERE projectId IN (SELECT id FROM Project WHERE orderId LIKE 'E2E-%')`,
     ).run();
     db.prepare(`DELETE FROM Project WHERE orderId LIKE 'E2E-%'`).run();
+
+    // General expenses and retainers have no project to be found through, so
+    // they are matched on the client the tests attach them to, or on the
+    // description they are given.
+    db.prepare(`DELETE FROM Expense WHERE description LIKE 'E2E %'`).run();
+    db.prepare(
+      `DELETE FROM Expense
+        WHERE clientId IN (SELECT id FROM Client WHERE name LIKE 'E2E %')`,
+    ).run();
+    db.prepare(
+      `DELETE FROM RetainerReceipt
+        WHERE clientId IN (SELECT id FROM Client WHERE name LIKE 'E2E %')`,
+    ).run();
 
     // An exporter is linked to projects through allocations, which go with
     // the exporter; the orders themselves are somebody else's to clean up.

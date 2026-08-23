@@ -23,7 +23,6 @@ export const PROJECT_SORT_COLUMNS = [
   "status",
 ] as const;
 
-export type ProjectSortColumn = (typeof PROJECT_SORT_COLUMNS)[number];
 
 /** Filters this list understands, and that survive sorting and paging. */
 export const PROJECT_FILTER_KEYS = ["clientId", "status", "from", "to", "currency"] as const;
@@ -258,11 +257,15 @@ export async function getProject(id: string) {
         },
       },
       payments: { where: notDeleted, orderBy: { paidOn: "asc" } },
+      expenses: { where: notDeleted, orderBy: { incurredOn: "asc" } },
     },
   });
   if (!project) return null;
 
-  return { ...project, ledger: projectLedger(project, project.payments) };
+  return {
+    ...project,
+    ledger: projectLedger(project, project.payments, project.expenses),
+  };
 }
 
 /** Clients and exporters for the form's pickers and the list's filter. */

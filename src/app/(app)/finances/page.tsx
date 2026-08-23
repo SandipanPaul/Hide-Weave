@@ -1,18 +1,14 @@
 import type { Metadata } from "next";
 import { BarChart3 } from "lucide-react";
-import { EconomicsFilters } from "./economics-filters";
-import {
-  CashChart,
-  MonthlyChart,
-  RankedChart,
-  StatusDonut,
-} from "./economics-charts";
+import { FinancesFilters } from "./finances-filters";
+import { CashChart, ExpensesChart, StatusDonut } from "./finances-charts";
 import {
   LateDeliveriesTable,
   ReceivablesTable,
-  TopClientsTable,
   UpcomingSamplingsTable,
-} from "./economics-tables";
+} from "./finances-tables";
+import { Passbook, type PassbookRow } from "./passbook";
+import { AddExpenseDialog } from "./add-expense-dialog";
 import { ExportButton } from "./export-button";
 import { StatCard } from "./stat-card";
 import { EmptyState } from "@/components/layout/empty-state";
@@ -21,27 +17,36 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   cashByMonth,
-  commissionByClient,
-  commissionByProduct,
+  expensesByCategory,
   lateDeliveries,
   monthlyRetainer,
-  monthlyTotals,
   overdueReceivables,
+  passbook,
   summarise,
-  topClients,
-} from "@/lib/economics/aggregate";
+} from "@/lib/finances/aggregate";
 import {
+  getClientOptions,
   getCurrencyOptions,
-  getEconomics,
-  parseEconomicsRange,
+  getFinances,
+  parseFinanceRange,
   rangeToInputs,
-} from "@/lib/economics/queries";
-import { formatDateOnly, todayUtc } from "@/lib/dates";
-import { PROJECT_STATUS_LABELS } from "@/lib/enums";
-import { formatMoney, minorToMajorNumber } from "@/lib/money";
+} from "@/lib/finances/queries";
+import { formatDateOnly, todayUtc, utcToDateOnly } from "@/lib/dates";
+import {
+  EXPENSE_CATEGORY_LABELS,
+  LEDGER_KIND_LABELS,
+  PROJECT_STATUS_LABELS,
+  type ExpenseCategory,
+} from "@/lib/enums";
+import {
+  DEFAULT_CURRENCY,
+  formatMoney,
+  minorToMajorNumber,
+  minorToMajorString,
+} from "@/lib/money";
 import type { RawSearchParams } from "@/lib/list-params";
 
-export const metadata: Metadata = { title: "Economics — Hide & Weave" };
+export const metadata: Metadata = { title: "Finances — Hide & Weave" };
 
 /** "2026-03" -> "Mar 26", which fits on an axis. */
 function monthLabel(month: string): string {
@@ -50,31 +55,87 @@ function monthLabel(month: string): string {
   return `${date.toLocaleString("en", { month: "short", timeZone: "UTC" })} ${String(year).slice(2)}`;
 }
 
-export default async function EconomicsPage({
+export default async function FinancesPage({
   searchParams,
 }: {
   searchParams: Promise<RawSearchParams>;
 }) {
   const params = await searchParams;
   const currencies = await getCurrencyOptions();
-  const range = parseEconomicsRange(params, currencies);
-  const data = await getEconomics(range);
+  const range = parseFinanceRange(params, currencies);
+  const [data, clients] = await Promise.all([getFinances(range), getClientOptions()]);
 
   const today = todayUtc();
   const money = (minor: bigint) => formatMoney(minor, range.currency);
   const chartNumber = (minor: bigint) => minorToMajorNumber(minor, range.currency);
 
-  const summary = summarise(data.projects, data.cashPayments);
+  const summary = summarise(data.projects, data.cashPayments, data.expenses, data.retainers);
   const retainer = monthlyRetainer(data.clients);
   const inputs = rangeToInputs(range);
+
+  const categoryLabelOf = (category: string | null) =>
+    category ? (EXPENSE_CATEGORY_LABELS[category as ExpenseCategory] ?? category) : null;
+
+  // The passbook prefixes its ids so a receipt and an expense can never
+  // collide; the suffix is what looks the underlying row back up for the edit
+  // form that sits in its place.
+  const expenseById = new Map(data.expenses.map((expense) => [expense.id, expense]));
+
+  const passbookRows: PassbookRow[] = passbook(
+    data.cashPayments,
+    data.expenses,
+    data.retainers,
+  ).map((entry) => {
+    // Only expenses are editable here. Commission belongs to an order and is
+    // corrected on its page; a retainer row is derived from the schedule and
+    // is changed by starting or stopping it on the client.
+    const expense = entry.id.startsWith("expense-")
+      ? expenseById.get(entry.id.slice("expense-".length))
+      : undefined;
+
+    return {
+      id: entry.id,
+      displayDate: formatDateOnly(entry.date),
+      direction: entry.direction,
+      kind: entry.kind,
+      kindLabel: LEDGER_KIND_LABELS[entry.kind],
+      description: entry.description,
+      amountDisplay: money(entry.amount),
+      balanceDisplay: money(entry.balance),
+      balanceNegative: entry.balance < 0n,
+      projectId: entry.projectId,
+      orderId: entry.orderId,
+      orderExists: entry.orderExists,
+      categoryLabel: categoryLabelOf(entry.category),
+      expense: expense
+        ? {
+            id: expense.id,
+            incurredOn: utcToDateOnly(expense.incurredOn),
+            displayDate: formatDateOnly(expense.incurredOn),
+            description: expense.description,
+            amountDisplay: money(expense.amount),
+            amountInput: minorToMajorString(expense.amount, range.currency),
+            category: expense.category ?? "",
+            categoryLabel: categoryLabelOf(expense.category),
+            notes: expense.notes,
+            projectId: expense.projectId,
+            clientId: expense.clientId ?? "",
+            clientName: expense.clientName,
+          }
+        : null,
+    };
+  });
+
+  const totalIn = summary.moneyIn;
   const isDefault = !params.from && !params.to && !params.currency;
 
   if (currencies.length === 0) {
     return (
       <>
         <PageHeader
-          title="Economics"
+          title="Finances"
           description="Every figure here is derived from your orders, payments and samplings."
+          actions={<AddExpenseDialog currency={DEFAULT_CURRENCY} clients={clients} />}
         />
         <EmptyState
           icon={BarChart3}
@@ -88,12 +149,17 @@ export default async function EconomicsPage({
   return (
     <>
       <PageHeader
-        title="Economics"
-        description="Every figure here is derived from your orders, payments and samplings — nothing on this page is typed in."
-        actions={<ExportButton />}
+        title="Finances"
+        description="Orders, payments and samplings drive every figure here. Expenses and retainers are the two things you record on this page."
+        actions={
+          <>
+            <AddExpenseDialog currency={range.currency} clients={clients} />
+            <ExportButton />
+          </>
+        }
       />
 
-      <EconomicsFilters
+      <FinancesFilters
         from={inputs.from}
         to={inputs.to}
         currency={range.currency}
@@ -117,10 +183,22 @@ export default async function EconomicsPage({
             hint="Goods moved through you — not income"
           />
           <StatCard
-            label="Cash received"
-            value={money(summary.cashReceived)}
-            hint="Payments that arrived in this range"
+            label="Money in"
+            value={money(summary.moneyIn)}
+            hint="Commission and retainer fees received in this range"
             tone="positive"
+          />
+          <StatCard
+            label="Expenses"
+            value={money(summary.expenses)}
+            hint="What you spent in this range, on orders and overheads"
+          />
+          {/* Commission less expenses: the figure the two above net down to. */}
+          <StatCard
+            label="Net earned"
+            value={money(summary.netEarned)}
+            hint="Commission earned, plus retainer fees received, less expenses"
+            tone={summary.netEarned < 0n ? "warning" : "positive"}
           />
           <StatCard
             label="Outstanding"
@@ -133,10 +211,14 @@ export default async function EconomicsPage({
             hint="Unpaid commission on orders not yet delivered"
             tone={summary.atRisk > 0n ? "warning" : undefined}
           />
+          {/* Two different things, deliberately on one card: the fees actually
+              logged in this range, and what the clients are charged monthly.
+              Only the first is income. */}
           <StatCard
-            label="Monthly retainer"
-            value={money(retainer)}
-            hint="Billed monthly across active clients, separate from commission"
+            label="Retainers received"
+            value={money(summary.retainerReceived)}
+            hint={`${money(retainer)} a month across active clients`}
+            tone="positive"
           />
           <StatCard
             label="Active projects"
@@ -164,16 +246,6 @@ export default async function EconomicsPage({
           </Card>
         </div>
 
-        <MonthlyChart
-          points={monthlyTotals(data.projects, range.from, range.to).map((point) => ({
-            month: point.month,
-            label: monthLabel(point.month),
-            orderValue: chartNumber(point.orderValue),
-            commission: chartNumber(point.commission),
-          }))}
-          currency={range.currency}
-        />
-
         <div className="grid gap-6 lg:grid-cols-2">
           <CashChart
             points={cashByMonth(data.cashPayments, range.from, range.to).map((point) => ({
@@ -191,36 +263,25 @@ export default async function EconomicsPage({
             }))}
           />
 
-          <RankedChart
-            title="Commission by client"
-            description="Top 10 in this range."
-            points={commissionByClient(data.projects).map((row) => ({
-              label: row.label,
-              commission: chartNumber(row.commission),
-            }))}
-            currency={range.currency}
-          />
-
-          <RankedChart
-            title="Commission by product"
-            description="Top 10 in this range."
-            points={commissionByProduct(data.projects).map((row) => ({
-              label: row.label,
-              commission: chartNumber(row.commission),
+          <ExpensesChart
+            points={expensesByCategory(data.expenses).map((row) => ({
+              label: row.key
+                ? (EXPENSE_CATEGORY_LABELS[row.key as ExpenseCategory] ?? row.key)
+                : "Uncategorised",
+              amount: chartNumber(row.amount),
             }))}
             currency={range.currency}
           />
         </div>
 
-        <TopClientsTable
-          rows={topClients(data.projects).map((row) => ({
-            clientId: row.clientId,
-            clientName: row.clientName,
-            orders: row.orders,
-            orderValue: money(row.orderValue),
-            commission: money(row.commission),
-            averagePercentage: `${row.averagePercentage.toFixed(2)}%`,
-          }))}
+        <Passbook
+          rows={passbookRows}
+          currency={range.currency}
+          clients={clients}
+          totalInDisplay={money(totalIn)}
+          totalOutDisplay={money(summary.expenses)}
+          netDisplay={money(summary.netCash)}
+          netNegative={summary.netCash < 0n}
         />
 
         <div className="grid gap-6 xl:grid-cols-2">
