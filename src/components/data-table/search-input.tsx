@@ -50,7 +50,10 @@ export function SearchInput({
   }, [value, urlQuery, pathname, router, searchParams]);
 
   return (
-    <div className="relative w-full max-w-xs">
+    // Wide enough for the longest placeholder any tab passes in — at max-w-xs
+    // the exporters hint was cut to "Search company, contact, email, webs".
+    // Still `w-full` underneath, so it shrinks on a narrow screen.
+    <div className="relative w-full max-w-md">
       <Search
         className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
         aria-hidden

@@ -169,8 +169,14 @@ model Project {
   /// A project may be split across several — see ProjectExporter.
   exporters ProjectExporter[]
 
-  product  String
-  orderId  String
+  product String
+  /// The agent's own reference for this order, issued by the app — see
+  /// ORDER_CODES in src/lib/codes.ts. Never typed.
+  orderId String
+  /// The client's reference for the same order: their PO number, in their
+  /// format. It is what arrives in their emails, so it is searchable — but it
+  /// is theirs, so it is never generated, validated or required.
+  clientReference String?
   quantity Int
   unit     String @default("pcs")
 

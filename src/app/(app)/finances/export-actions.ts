@@ -46,6 +46,7 @@ export async function exportFinancesCsv(
 
   const headers = [
     "Order ID",
+    "Client reference",
     "Client",
     "Product",
     "Status",
@@ -72,6 +73,7 @@ export async function exportFinancesCsv(
 
       return {
         "Order ID": project.orderId,
+        "Client reference": project.clientReference ?? "",
         Client: project.clientName,
         Product: project.product,
         Status: PROJECT_STATUS_LABELS[project.status as ProjectStatus] ?? project.status,

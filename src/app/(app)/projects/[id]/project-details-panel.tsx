@@ -169,6 +169,13 @@ export function ProjectDetailsPanel({
               )}
             </DetailRow>
             <DetailRow label="Product">{project.product}</DetailRow>
+            <DetailRow label="Client reference">
+              {project.clientReference ? (
+                <span className="font-mono">{project.clientReference}</span>
+              ) : (
+                DASH
+              )}
+            </DetailRow>
             <DetailRow label="Quantity">
               <span className="tabular-nums">
                 {Number(project.quantity).toLocaleString("en-IN")} {project.unit}

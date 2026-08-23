@@ -263,7 +263,9 @@ export const projectInputSchema = z
     clientId: z.string().min(1, "A client is required."),
     exporters: exporterSplitSchema,
     product: z.string().trim().min(1, "Product is required.").max(200),
-    orderId: z.string().trim().min(1, "Order ID is required.").max(100),
+    // Whatever the client calls this order. Never validated for shape: a PO
+    // number is theirs, and rejecting an unfamiliar one would be wrong.
+    clientReference: optionalText,
     quantity: z.coerce
       .number({ error: "Quantity must be a number." })
       .int("Quantity must be a whole number.")

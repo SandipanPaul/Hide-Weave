@@ -61,6 +61,8 @@ export type FinanceProject = {
   clientName: string;
   product: string;
   orderId: string;
+  /** The client's own reference, carried into the orders export. */
+  clientReference: string | null;
   orderValue: bigint;
   commissionPercentage: number;
   status: ProjectStatus;

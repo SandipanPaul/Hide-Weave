@@ -1,6 +1,7 @@
 "use client";
 
 import { Plus, X } from "lucide-react";
+import { Field } from "@/components/form/field";
 import { SelectField, TextAreaField, TextField } from "@/components/form/fields";
 import { FormActions, FormFields } from "@/components/form/form-shell";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ export type ProjectFormValues = {
   exporters: ExporterRow[];
   product: string;
   orderId: string;
+  clientReference: string;
   quantity: string;
   unit: string;
   orderValue: string;
@@ -51,6 +53,7 @@ export function emptyProject(): ProjectFormValues {
     exporters: [],
     product: "",
     orderId: "",
+    clientReference: "",
     quantity: "",
     unit: "pcs",
     orderValue: "",
@@ -208,16 +211,30 @@ export function ProjectForm({
             error={errorFor("product")}
           />
 
-          <TextField
-            label="Order ID"
-            name="orderId"
-            required
-            hint="Your reference for this consignment."
-            value={values.orderId}
-            onValueChange={set("orderId")}
-            error={errorFor("orderId")}
-          />
+          {/* Issued by the app, never typed — so it is shown rather than
+              edited. On a new order there is nothing to show yet, because the
+              number is only taken when the order is actually written. */}
+          <Field label="Order ID" hint="Issued automatically — your reference for this consignment.">
+            {(props) => (
+              <p
+                {...props}
+                className="flex h-8 items-center font-mono text-sm text-muted-foreground"
+              >
+                {values.orderId || "Assigned when you save"}
+              </p>
+            )}
+          </Field>
         </div>
+
+        <TextField
+          label="Client reference"
+          name="clientReference"
+          hint="Their PO number, if they gave you one — searchable, in whatever format they use."
+          placeholder="4500123"
+          value={values.clientReference}
+          onValueChange={set("clientReference")}
+          error={errorFor("clientReference")}
+        />
 
         <div className="grid gap-4 @lg:grid-cols-[minmax(0,1fr)_8rem]">
           <TextField

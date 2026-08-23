@@ -123,7 +123,9 @@ describe("project header guessing", () => {
       config.fields,
     );
     expect(mapping).toEqual({
-      "PO No.": "orderId",
+      // A column headed "PO No." is the *client's* number, so it lands in
+      // Client reference. Our own order reference is issued, never imported.
+      "PO No.": "clientReference",
       "Buyer's Name": "clientName",
       Item: "product",
       QTY: "quantity",
@@ -197,5 +199,31 @@ describe("the exporter column", () => {
   it("names a quantity it cannot read", () => {
     const result = withExporter("Gujarat Spice Works: lots");
     expect(result.errors[0].message).toMatch(/is not a quantity/);
+  });
+});
+
+describe("order and client references are kept apart", () => {
+  it("maps a sheet's own order column to our reference", () => {
+    expect(guessMapping(["Order No."], config.fields)).toEqual({ "Order No.": "orderId" });
+  });
+
+  it("maps every way a client's number is written to their reference", () => {
+    for (const header of ["PO", "PO Number", "Purchase Order", "Buyer Ref", "Customer Ref"]) {
+      expect(guessMapping([header], config.fields), header).toEqual({
+        [header]: "clientReference",
+      });
+    }
+  });
+
+  it("keeps a client reference exactly as given", () => {
+    // Their format, not ours: nothing is normalised, padded or rejected.
+    for (const value of ["4500123", "PO/2026/0417", "po-17b"]) {
+      expect(messagesFor({ ...validRow, clientReference: value }, "clientReference"), value)
+        .toEqual([]);
+    }
+  });
+
+  it("does not require one — plenty of orders never get a PO number", () => {
+    expect(messagesFor({ ...validRow, clientReference: "" }, "clientReference")).toEqual([]);
   });
 });

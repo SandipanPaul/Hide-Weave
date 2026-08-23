@@ -53,7 +53,7 @@ export function projectRowInput(
     clientId: clientId ?? "",
     exporters,
     product: mapped.product ?? "",
-    orderId: mapped.orderId ?? "",
+    clientReference: mapped.clientReference,
     // Required numbers are passed as "" so the schema reports its own message
     // rather than a raw type error.
     quantity: mapped.quantity ?? "",
@@ -170,10 +170,25 @@ const FIELDS: ImportConfig["fields"] = [
   {
     key: "orderId",
     label: "Order ID",
-    required: true,
-    aliases: ["order", "orderno", "ordernumber", "orderref", "reference", "ref", "invoiceno", "pono", "po"],
-    example: "ORD-2026-0042",
-    hint: "Must be unique across all projects.",
+    // Optional, and never written: the app issues order references. A value
+    // here only says "this row is that existing order", which is what makes an
+    // exported file editable and re-importable. Blank means a new order.
+    required: false,
+    // Only aliases for *our* reference. Anything that names the client's
+    // number — "PO", "reference" — now maps to Client reference instead, which
+    // is where such a value actually belongs.
+    aliases: ["order", "orderno", "ordernumber", "orderid", "orderref"],
+    example: "ORD00000042",
+    hint: "Leave blank for a new order — the app issues the reference. Fill it in to update an existing one.",
+  },
+  {
+    key: "clientReference",
+    label: "Client reference",
+    required: false,
+    aliases: ["clientref", "clientreference", "customerref", "po", "pono", "ponumber",
+              "purchaseorder", "reference", "ref", "invoiceno", "buyerref"],
+    example: "4500123",
+    hint: "The client's own PO number, in their format. Stored as given and searchable.",
   },
   {
     key: "clientName",

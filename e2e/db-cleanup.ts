@@ -22,22 +22,25 @@ export function cleanupE2ERows(): number {
       `DELETE FROM ClientSampling
         WHERE clientId IN (SELECT id FROM Client WHERE name LIKE 'E2E %')`,
     ).run();
-    // Projects and their payments belong to E2E clients and go with them via
-    // the schema's cascade, but a test may also have attached one to a seeded
-    // client — those are named by order ID instead.
+    // Order references are issued by the app, so a test project cannot be
+    // recognised by its reference — it is found through the E2E client it
+    // belongs to, which is what the tests actually name.
     db.prepare(
       `DELETE FROM Payment
-        WHERE projectId IN (SELECT id FROM Project WHERE orderId LIKE 'E2E-%')`,
+        WHERE projectId IN (SELECT id FROM Project WHERE clientId IN (SELECT id FROM Client WHERE name LIKE 'E2E %'))`,
     ).run();
     db.prepare(
       `DELETE FROM Expense
-        WHERE projectId IN (SELECT id FROM Project WHERE orderId LIKE 'E2E-%')`,
+        WHERE projectId IN (SELECT id FROM Project WHERE clientId IN (SELECT id FROM Client WHERE name LIKE 'E2E %'))`,
     ).run();
     db.prepare(
       `DELETE FROM ProjectExporter
-        WHERE projectId IN (SELECT id FROM Project WHERE orderId LIKE 'E2E-%')`,
+        WHERE projectId IN (SELECT id FROM Project WHERE clientId IN (SELECT id FROM Client WHERE name LIKE 'E2E %'))`,
     ).run();
-    db.prepare(`DELETE FROM Project WHERE orderId LIKE 'E2E-%'`).run();
+    db.prepare(
+      `DELETE FROM Project
+        WHERE clientId IN (SELECT id FROM Client WHERE name LIKE 'E2E %')`,
+    ).run();
 
     // General expenses and retainers have no project to be found through, so
     // they are matched on the client the tests attach them to, or on the

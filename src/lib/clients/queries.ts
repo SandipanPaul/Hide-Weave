@@ -1,7 +1,7 @@
 import { emailKey } from "@/lib/contacts";
 import { foldCase } from "@/lib/keys";
 import { resolveCountry } from "@/lib/countries";
-import { nextClientCode } from "./code";
+import { CLIENT_CODES } from "@/lib/codes";
 import { notDeleted, prisma, type Db } from "@/lib/db";
 import { todayUtc } from "@/lib/dates";
 import { OPEN_PROJECT_STATUSES, type ClientStatus } from "@/lib/enums";
@@ -260,7 +260,7 @@ export async function getClient(id: string) {
 export async function reserveClientCode(db: Db = prisma): Promise<string> {
   // Soft-deleted clients included deliberately: their codes are still spent.
   const rows = await db.client.findMany({ select: { code: true } });
-  return nextClientCode(rows.map((row) => row.code));
+  return CLIENT_CODES.next(rows.map((row) => row.code));
 }
 
 /** Every retainer fee this client has paid, newest first. */

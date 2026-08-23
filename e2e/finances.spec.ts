@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { addClientNamed, signIn, uniqueName, uniqueOrderId } from "./helpers";
+import { addClientNamed, signIn, uniqueName, orderIdForClient } from "./helpers";
 import { cleanupE2ERows } from "./db-cleanup";
 
 /**
@@ -25,7 +25,6 @@ test.describe("finances", () => {
     page,
   }) => {
     const client = await addClientNamed(page, uniqueName("E2E Dashboard Client"));
-    const orderId = uniqueOrderId();
     const today = dayOffset(0);
 
     // A sampling inside the 30-day window the dashboard reports on. Samplings
@@ -46,7 +45,6 @@ test.describe("finances", () => {
     await dialog.getByLabel("Client").click();
     await page.getByRole("option", { name: client }).click();
     await dialog.getByLabel("Product").fill("Frozen prawns");
-    await dialog.getByLabel("Order ID").fill(orderId);
     await dialog.getByLabel(/^Quantity/).fill("500");
     await dialog.getByLabel("Order value").fill("1000000");
     await dialog.getByLabel("Commission %").fill("5");
@@ -57,6 +55,7 @@ test.describe("finances", () => {
     await expect(dialog.getByTestId("commission-preview")).toContainText("50,000");
     await dialog.getByRole("button", { name: "Add project" }).click();
     await dialog.waitFor({ state: "hidden" });
+    const orderId = await orderIdForClient(page, client);
 
     // A part payment, leaving ₹30,000 owed.
     await page.getByLabel("Search projects").fill(orderId);
@@ -135,7 +134,7 @@ test.describe("finances", () => {
 
     expect(filename).toMatch(/^finances-INR-\d{4}-\d{2}-\d{2}-to-/);
     expect(csv.split("\r\n")[0]).toBe(
-      "Order ID,Client,Product,Status,Order date,Expected delivery,Actual delivery,Currency,Order value,Commission %,Commission,Received,Outstanding,Expenses,Net",
+      "Order ID,Client reference,Client,Product,Status,Order date,Expected delivery,Actual delivery,Currency,Order value,Commission %,Commission,Received,Outstanding,Expenses,Net",
     );
     expect(csv.split("\r\n").length).toBeGreaterThan(1);
   });

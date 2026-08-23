@@ -28,6 +28,7 @@ function project(overrides: Partial<FinanceProject> = {}): FinanceProject {
     clientName: "Meridian Foods",
     product: "Basmati rice",
     orderId: "ORD-1",
+    clientReference: null,
     orderValue: 100_000_00n,
     commissionPercentage: 2,
     status: "DELIVERED" as ProjectStatus,

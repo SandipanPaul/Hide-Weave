@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { addClientNamed, signIn, uniqueName, uniqueOrderId } from "./helpers";
+import { addClientNamed, signIn, uniqueName, orderIdForClient } from "./helpers";
 import { cleanupE2ERows } from "./db-cleanup";
 
 /**
@@ -17,21 +17,19 @@ test.describe("expenses", () => {
   const today = () => new Date().toISOString().slice(0, 10);
 
   async function addProject(page: import("@playwright/test").Page, client: string) {
-    const orderId = uniqueOrderId();
     await page.goto("/projects");
     await page.getByRole("button", { name: "Add project" }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("Client").click();
     await page.getByRole("option", { name: client }).click();
     await dialog.getByLabel("Product").fill("Leather satchels");
-    await dialog.getByLabel("Order ID").fill(orderId);
     await dialog.getByLabel(/^Quantity/).fill("100");
     await dialog.getByLabel("Order value").fill("1000000");
     await dialog.getByLabel("Commission %").fill("5");
     await dialog.getByLabel("Order date").fill(today());
     await dialog.getByRole("button", { name: "Add project" }).click();
     await dialog.waitFor({ state: "hidden" });
-    return orderId;
+    return orderIdForClient(page, client);
   }
 
   test("an expense on an order cuts the net, not what the client owes", async ({ page }) => {

@@ -9,6 +9,7 @@
  *
  * Run with: npm run db:seed   (wipes and repopulates)
  */
+import { ORDER_CODES } from "../src/lib/codes";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
@@ -274,7 +275,7 @@ async function main() {
           exporters: { create: allocations },
           product,
           unit,
-          orderId: `ORD-${String(2500 + i)}`,
+          orderId: ORDER_CODES.format(2500 + i),
           quantity,
           orderValue,
           commissionPercentage: Number((randomInt(75, 450) / 100).toFixed(2)),

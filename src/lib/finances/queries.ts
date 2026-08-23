@@ -137,6 +137,7 @@ export async function getFinances(range: FinanceRange): Promise<FinanceData> {
         clientId: true,
         product: true,
         orderId: true,
+        clientReference: true,
         orderValue: true,
         commissionPercentage: true,
         status: true,

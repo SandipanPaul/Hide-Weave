@@ -1,6 +1,6 @@
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { addClientNamed, signInAtProjects, uniqueName, uniqueOrderId } from "./helpers";
+import { addClientNamed, signInAtProjects, uniqueName, orderIdForClient } from "./helpers";
 import { cleanupE2ERows } from "./db-cleanup";
 
 /**
@@ -22,7 +22,6 @@ test.describe("projects", () => {
   const COMMISSION = "62,500";
 
   async function addProject(page: import("@playwright/test").Page, client: string) {
-    const orderId = uniqueOrderId();
 
     await page.goto("/projects");
     await page.getByRole("button", { name: "Add project" }).click();
@@ -32,7 +31,6 @@ test.describe("projects", () => {
     await page.getByRole("option", { name: client }).click();
 
     await dialog.getByLabel("Product").fill("Basmati rice");
-    await dialog.getByLabel("Order ID").fill(orderId);
     await dialog.getByLabel(/^Quantity/).fill("1000");
     await dialog.getByLabel("Order value").fill(ORDER_VALUE);
     await dialog.getByLabel("Commission %").fill("2.5");
@@ -43,7 +41,7 @@ test.describe("projects", () => {
 
     await dialog.getByRole("button", { name: "Add project" }).click();
     await dialog.waitFor({ state: "hidden" });
-    return orderId;
+    return orderIdForClient(page, client);
   }
 
   /**
@@ -129,8 +127,6 @@ test.describe("projects", () => {
       await dialog.getByRole("button", { name: "Add exporter" }).click();
       await dialog.waitFor({ state: "hidden" });
     }
-
-    const orderId = uniqueOrderId();
     await page.goto("/projects");
     await page.getByRole("button", { name: "Add project" }).click();
     const dialog = page.getByRole("dialog");
@@ -138,7 +134,6 @@ test.describe("projects", () => {
     await dialog.getByLabel("Client").click();
     await page.getByRole("option", { name: client }).click();
     await dialog.getByLabel("Product").fill("Leather wallets");
-    await dialog.getByLabel("Order ID").fill(orderId);
     // 5,00,000 pieces split 2 / 2 / 1 lakh.
     await dialog.getByLabel(/^Quantity/).fill("500000");
     await dialog.getByLabel("Order value").fill("2500000");
@@ -162,6 +157,7 @@ test.describe("projects", () => {
     await expect(dialog.getByText("All 5,00,000 pcs assigned")).toBeVisible();
     await dialog.getByRole("button", { name: "Add project" }).click();
     await dialog.waitFor({ state: "hidden" });
+    const orderId = await orderIdForClient(page, client);
 
     // The detail page lists all three with their quantities.
     await openProject(page, orderId);
@@ -193,7 +189,6 @@ test.describe("projects", () => {
     await dialog.getByLabel("Client").click();
     await page.getByRole("option", { name: client }).click();
     await dialog.getByLabel("Product").fill("Belts");
-    await dialog.getByLabel("Order ID").fill(uniqueOrderId());
     await dialog.getByLabel(/^Quantity/).fill("1000");
     await dialog.getByLabel("Order value").fill("50000");
     await dialog.getByLabel("Commission %").fill("2");
@@ -207,24 +202,48 @@ test.describe("projects", () => {
     await expect(dialog.getByText(/more than the order's/)).toBeVisible();
   });
 
-  test("refuses a second project with the same order ID", async ({ page }) => {
-    const client = await addClientNamed(page, uniqueName("E2E Dup Client"));
-    const orderId = await addProject(page, client);
+  test("issues a distinct order reference for every project", async ({ page }) => {
+    // References are generated, so a duplicate can no longer be typed. What
+    // matters instead is that the sequence never hands out the same one twice.
+    const client = await addClientNamed(page, uniqueName("E2E Sequence Client"));
+    const first = await addProject(page, client);
 
     await page.goto("/projects");
     await page.getByRole("button", { name: "Add project" }).click();
     const dialog = page.getByRole("dialog");
-
     await dialog.getByLabel("Client").click();
     await page.getByRole("option", { name: client }).click();
-    await dialog.getByLabel("Product").fill("Basmati rice");
-    await dialog.getByLabel("Order ID").fill(orderId);
+    await dialog.getByLabel("Product").fill("Cardamom");
     await dialog.getByLabel(/^Quantity/).fill("10");
     await dialog.getByLabel("Order value").fill("1000");
     await dialog.getByLabel("Commission %").fill("1");
+    await dialog.getByLabel("Order date").fill("2026-08-02");
     await dialog.getByRole("button", { name: "Add project" }).click();
+    await dialog.waitFor({ state: "hidden" });
 
-    await expect(dialog.getByText("Another project already uses this order ID.")).toBeVisible();
+    await page.goto("/projects");
+    await page.getByLabel("Search projects").fill(client);
+    await expect(page.getByText(/of 2 projects/)).toBeVisible();
+
+    const refs = await page.getByRole("link", { name: /^ORD\d+$/ }).allTextContents();
+    expect(refs).toHaveLength(2);
+    expect(new Set(refs).size).toBe(2);
+    expect(refs).toContain(first);
+    // Eight digits, no separator.
+    for (const ref of refs) expect(ref).toMatch(/^ORD\d{8}$/);
+  });
+
+  test("shows the order reference as issued rather than as an input", async ({ page }) => {
+    const client = await addClientNamed(page, uniqueName("E2E ReadOnly Client"));
+
+    await page.goto("/projects");
+    await page.getByRole("button", { name: "Add project" }).click();
+    const dialog = page.getByRole("dialog");
+    // Nothing to type into: the field is shown, not edited.
+    await expect(dialog.getByText("Assigned when you save")).toBeVisible();
+    await expect(dialog.getByRole("textbox", { name: "Order ID" })).toHaveCount(0);
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    void client;
   });
 
   test("filters by client and totals only what the filter matches", async ({ page }) => {

@@ -18,6 +18,7 @@ import { foldCase } from "@/lib/keys";
 import { ImportRowError, runImport } from "@/lib/csv/import-runner";
 import { dateOnlyToUtc } from "@/lib/dates";
 import { notDeleted, prisma } from "@/lib/db";
+import { reserveOrderId } from "@/lib/projects/queries";
 import { projectInputSchema } from "@/lib/schemas";
 
 /**
@@ -143,7 +144,7 @@ export async function importProjects(
 
     if (decision === "update") {
       const target = await tx.project.findFirst({
-        where: { ...notDeleted, orderId: parsed.data.orderId },
+        where: { ...notDeleted, orderId: row.mapped.orderId ?? "" },
         select: { id: true },
       });
       if (!target) {
@@ -162,7 +163,11 @@ export async function importProjects(
       return { outcome: "updated" };
     }
 
-    await tx.project.create({ data: { ...data, exporters: { create: allocations } } });
+    // Imported orders are issued a reference like any other; whatever the file
+    // said is only ever used to find an existing one.
+    await tx.project.create({
+      data: { ...data, orderId: await reserveOrderId(tx), exporters: { create: allocations } },
+    });
     return { outcome: "created" };
   });
 

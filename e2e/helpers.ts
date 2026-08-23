@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 export const PASSWORD = process.env.APP_PASSWORD ?? "changeme";
 
@@ -42,9 +42,20 @@ export async function addClientNamed(page: Page, name: string) {
   return name;
 }
 
-/** An order ID unique to this run. The E2E- prefix is what cleanup looks for. */
-export function uniqueOrderId() {
-  return `E2E-${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`.toUpperCase();
+/**
+ * The order reference the app issued for a project, found by its client.
+ *
+ * Order references are generated, so a test cannot choose one up front; the
+ * unique client name is the handle instead. Cleanup finds these projects
+ * through their E2E client, not through the reference.
+ */
+export async function orderIdForClient(page: Page, client: string): Promise<string> {
+  await page.goto("/projects");
+  await page.getByLabel("Search projects").fill(client);
+  await expect(page.getByText(/of 1 projects/)).toBeVisible();
+  const link = page.getByRole("link", { name: /^ORD\d+$/ }).first();
+  await expect(link).toBeVisible();
+  return (await link.textContent())!.trim();
 }
 
 /** Signs in and navigates to the Exporters tab. */

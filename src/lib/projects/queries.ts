@@ -1,7 +1,7 @@
-import { notDeleted, prisma } from "@/lib/db";
+import { ORDER_CODES } from "@/lib/codes";
+import { notDeleted, prisma, type Db } from "@/lib/db";
 import { dateOnlyToUtc } from "@/lib/dates";
 import { PROJECT_STATUSES, type ProjectStatus } from "@/lib/enums";
-import { foldCase, matchByKey } from "@/lib/keys";
 import { computeCommission } from "@/lib/money";
 import { paginate, PAGE_SIZE, type ListParams, type Pagination } from "@/lib/list-params";
 import { projectLedger } from "./ledger";
@@ -82,6 +82,8 @@ function searchWhere(q: string) {
     OR: [
       { product: { contains: q } },
       { orderId: { contains: q } },
+      // Their PO number — the reference a client actually quotes at you.
+      { clientReference: { contains: q } },
       { client: { name: { contains: q } } },
       // Any exporter working on the order, not just the first.
       { exporters: { some: { ...notDeleted, exporter: { companyName: { contains: q } } } } },
@@ -92,6 +94,7 @@ function searchWhere(q: string) {
 const LIST_SELECT = {
   id: true,
   orderId: true,
+  clientReference: true,
   product: true,
   clientId: true,
   quantity: true,
@@ -290,22 +293,17 @@ export async function getProjectFormOptions() {
  * rows. Uniqueness is enforced here rather than by a database constraint so a
  * deleted project frees its order ID for reuse.
  */
-export async function findOrderIdConflict(
-  orderId: string,
-  excludeId?: string,
-): Promise<{ id: string; orderId: string } | null> {
-  const candidates = await prisma.project.findMany({
-    where: notDeleted,
-    select: { id: true, orderId: true },
-  });
-
-  return matchByKey(
-    candidates,
-    (candidate) => foldCase(candidate.orderId),
-    foldCase(orderId),
-    excludeId,
-  );
+/**
+ * The next order reference to issue.
+ *
+ * Reads every project including soft-deleted ones: their references are spent,
+ * and reissuing one would point two orders at the same number.
+ */
+export async function reserveOrderId(db: Db = prisma): Promise<string> {
+  const rows = await db.project.findMany({ select: { orderId: true } });
+  return ORDER_CODES.next(rows.map((row) => row.orderId));
 }
+
 
 /** Distinct currencies in use, so the filter only offers what exists. */
 export async function getProjectCurrencies(): Promise<string[]> {

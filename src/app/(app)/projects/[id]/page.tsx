@@ -79,6 +79,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     })),
     product: project.product,
     orderId: project.orderId,
+    clientReference: project.clientReference ?? "",
     quantity: String(project.quantity),
     unit: project.unit,
     // The edit form wants a plain editable number; the read view wants it
@@ -105,7 +106,19 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
       <PageHeader
         title={project.orderId}
-        description={`${project.product} for ${project.client.name}`}
+        description={
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>
+              {project.product} for {project.client.name}
+            </span>
+            {project.clientReference ? (
+              // Their number, beside ours — this is what their emails quote.
+              <span className="rounded border bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
+                Their ref: {project.clientReference}
+              </span>
+            ) : null}
+          </span>
+        }
       />
 
       <div className="space-y-6">

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { findOrderIdConflict } from "@/lib/projects/queries";
+import { reserveOrderId } from "@/lib/projects/queries";
 import { dateOnlyToUtc } from "@/lib/dates";
 import { notDeleted, prisma } from "@/lib/db";
 import {
@@ -39,7 +39,7 @@ function projectFormValues(formData: FormData) {
       quantity: quantities[index] ?? "",
     })),
     product: formData.get("product"),
-    orderId: formData.get("orderId"),
+    clientReference: formData.get("clientReference"),
     quantity: formData.get("quantity"),
     unit: formData.get("unit"),
     orderValue: formData.get("orderValue"),
@@ -108,17 +108,20 @@ export async function createProject(
   const badReference = await checkReferences(parsed.data.clientId, parsed.data.exporters);
   if (badReference) return badReference;
 
-  if (await findOrderIdConflict(parsed.data.orderId)) {
-    return failure("Another project already uses this order ID.", "orderId");
-  }
-
   try {
-    const project = await prisma.project.create({
-      data: {
-        ...projectData(parsed.data),
-        exporters: { create: allocationRows(parsed.data.exporters) },
-      },
-    });
+    // The order reference is issued here, not typed: it is the agent's own
+    // number for the order, and one the app hands out cannot be duplicated or
+    // mistyped. Reserved inside the write so a second order started at the
+    // same moment cannot take the same one.
+    const project = await prisma.$transaction(async (tx) =>
+      tx.project.create({
+        data: {
+          ...projectData(parsed.data),
+          orderId: await reserveOrderId(tx),
+          exporters: { create: allocationRows(parsed.data.exporters) },
+        },
+      }),
+    );
     revalidateProject(project.id, parsed.data.clientId);
     return { ok: true, data: { id: project.id } };
   } catch {
@@ -136,16 +139,14 @@ export async function updateProject(
 
   const existing = await prisma.project.findFirst({
     where: { id, ...notDeleted },
+    // orderId is not read back because it is never rewritten: the reference is
+    // issued once and stays with the order for as long as it exists.
     select: { id: true, clientId: true, currency: true },
   });
   if (!existing) return failure("This project no longer exists.");
 
   const badReference = await checkReferences(parsed.data.clientId, parsed.data.exporters);
   if (badReference) return badReference;
-
-  if (await findOrderIdConflict(parsed.data.orderId, id)) {
-    return failure("Another project already uses this order ID.", "orderId");
-  }
 
   // Payments and expenses are both held in the project's currency, so changing
   // it would silently reinterpret every amount already recorded.
