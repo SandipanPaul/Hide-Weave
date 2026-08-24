@@ -8,6 +8,8 @@ import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
 import { CLIENT_SORT_COLUMNS, getClientsPage } from "@/lib/clients/queries";
 import { parseListParams, type RawSearchParams } from "@/lib/list-params";
+import { rememberedSort } from "@/lib/sort-memory.server";
+import { RememberSort } from "@/components/data-table/remember-sort";
 
 export const metadata: Metadata = { title: "Clients — Hide & Weave" };
 
@@ -16,10 +18,16 @@ export default async function ClientsPage({
 }: {
   searchParams: Promise<RawSearchParams>;
 }) {
+  // Falls back to however this list was last sorted, so leaving the tab
+  // and coming back does not undo it.
+  const remembered = await rememberedSort("clients", CLIENT_SORT_COLUMNS, {
+    sort: "name",
+    dir: "asc",
+  });
   const params = parseListParams(await searchParams, {
     allowedSorts: CLIENT_SORT_COLUMNS,
-    defaultSort: "name",
-    defaultDir: "asc",
+    defaultSort: remembered.sort,
+    defaultDir: remembered.dir,
   });
 
   const { rows, pagination } = await getClientsPage(params);
@@ -61,7 +69,10 @@ export default async function ClientsPage({
           />
         )
       ) : (
-        <ClientsTable rows={rows} pagination={pagination} params={params} />
+        <>
+          <RememberSort scope="clients" sort={params.sort} dir={params.dir} />
+          <ClientsTable rows={rows} pagination={pagination} params={params} />
+        </>
       )}
     </>
   );

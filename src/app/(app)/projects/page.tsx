@@ -17,6 +17,8 @@ import {
   PROJECT_SORT_COLUMNS,
 } from "@/lib/projects/queries";
 import { parseListParams, type RawSearchParams } from "@/lib/list-params";
+import { rememberedSort } from "@/lib/sort-memory.server";
+import { RememberSort } from "@/components/data-table/remember-sort";
 
 export const metadata: Metadata = { title: "Projects — Hide & Weave" };
 
@@ -25,10 +27,16 @@ export default async function ProjectsPage({
 }: {
   searchParams: Promise<RawSearchParams>;
 }) {
+  // Falls back to however this list was last sorted, so leaving the tab
+  // and coming back does not undo it.
+  const remembered = await rememberedSort("projects", PROJECT_SORT_COLUMNS, {
+    sort: "orderDate",
+    dir: "desc",
+  });
   const params = parseListParams(await searchParams, {
     allowedSorts: PROJECT_SORT_COLUMNS,
-    defaultSort: "orderDate",
-    defaultDir: "desc",
+    defaultSort: remembered.sort,
+    defaultDir: remembered.dir,
     filterKeys: PROJECT_FILTER_KEYS,
   });
 
@@ -101,7 +109,10 @@ export default async function ProjectsPage({
           />
         )
       ) : (
-        <ProjectsTable rows={rows} pagination={pagination} params={params} totals={totals} />
+        <>
+          <RememberSort scope="projects" sort={params.sort} dir={params.dir} />
+          <ProjectsTable rows={rows} pagination={pagination} params={params} totals={totals} />
+        </>
       )}
     </>
   );

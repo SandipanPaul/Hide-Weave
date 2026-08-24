@@ -7,6 +7,8 @@ import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
 import { EXPORTER_SORT_COLUMNS, getExportersPage } from "@/lib/exporters/queries";
 import { parseListParams, type RawSearchParams } from "@/lib/list-params";
+import { rememberedSort } from "@/lib/sort-memory.server";
+import { RememberSort } from "@/components/data-table/remember-sort";
 
 export const metadata: Metadata = { title: "Exporters — Hide & Weave" };
 
@@ -15,10 +17,16 @@ export default async function ExportersPage({
 }: {
   searchParams: Promise<RawSearchParams>;
 }) {
+  // Falls back to however this list was last sorted, so leaving the tab
+  // and coming back does not undo it.
+  const remembered = await rememberedSort("exporters", EXPORTER_SORT_COLUMNS, {
+    sort: "companyName",
+    dir: "asc",
+  });
   const params = parseListParams(await searchParams, {
     allowedSorts: EXPORTER_SORT_COLUMNS,
-    defaultSort: "companyName",
-    defaultDir: "asc",
+    defaultSort: remembered.sort,
+    defaultDir: remembered.dir,
   });
 
   const { rows, pagination } = await getExportersPage(params);
@@ -55,7 +63,10 @@ export default async function ExportersPage({
           />
         )
       ) : (
-        <ExportersTable rows={rows} pagination={pagination} params={params} />
+        <>
+          <RememberSort scope="exporters" sort={params.sort} dir={params.dir} />
+          <ExportersTable rows={rows} pagination={pagination} params={params} />
+        </>
       )}
     </>
   );

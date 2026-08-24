@@ -484,6 +484,18 @@ them somewhere else on a schedule:
 30 2 * * * rsync -a /srv/hide-and-weave/backups/ backup-host:/backups/hide-and-weave/
 ```
 
+**What is actually scheduled** on the production box is a weekly run, in the
+`opc` crontab, logging beside the snapshots:
+
+```cron
+0 3 * * 0 cd /opt/hide-weave && /usr/bin/npm run db:backup >> /opt/hide-weave/backups/backup.log 2>&1
+```
+
+Weekly plus a 14-snapshot retention is about three months of history, and means
+up to a week of work sits between snapshots. Nothing yet copies them off the
+machine, so this protects against a bad import or a wrong delete, not against
+losing the VM.
+
 `.env` is **not** in the backup and is not in git. Keep `APP_PASSWORD` and
 `SESSION_SECRET` in a password manager: restoring a database onto a machine
 that cannot decrypt its session cookies leaves you locked out of your own data.
