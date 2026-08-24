@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { dateOnlyToUtc, todayUtc } from "@/lib/dates";
 import { notDeleted, prisma } from "@/lib/db";
-import { SAMPLING_STATUSES } from "@/lib/enums";
+import { CLIENT_STATUSES, SAMPLING_STATUSES } from "@/lib/enums";
 import { contactRows, findClientConflict, reserveClientCode } from "@/lib/clients/queries";
 import {
   clientInputSchema,
@@ -238,6 +238,32 @@ export async function deleteSampling(id: string): Promise<ActionResult> {
 
   await prisma.clientSampling.update({ where: { id }, data: { deletedAt: new Date() } });
   revalidateClients(existing.clientId);
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Changes only a client's status.
+ *
+ * Its own action rather than a trip through `updateClient`: that re-validates
+ * the whole record and rewrites the contact rows, which is a lot of machinery —
+ * and a lot to go wrong — for a field you change while working down a list. A
+ * client whose contacts happened to fail validation could not have their status
+ * moved at all.
+ */
+export async function setClientStatus(id: string, status: string): Promise<ActionResult> {
+  const parsed = z.enum(CLIENT_STATUSES).safeParse(status);
+  if (!parsed.success) return failure("That is not a status this app knows.");
+
+  const client = await prisma.client.findFirst({
+    where: { id, ...notDeleted },
+    select: { id: true, status: true },
+  });
+  if (!client) return failure("This client no longer exists.");
+  if (client.status === parsed.data) return { ok: true, data: undefined };
+
+  await prisma.client.update({ where: { id }, data: { status: parsed.data } });
+
+  revalidateClients(id);
   return { ok: true, data: undefined };
 }
 

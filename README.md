@@ -174,24 +174,60 @@ decisions → summary → confirm.
 Adding an import to another tab means writing a config and two server actions —
 no UI work.
 
-## Client references
+## References
 
-Every client carries a short reference — `HWC00042` — alongside the cuid primary
-key. Three letters and five digits with no separator, so it is one unbroken
-token that a mailbox search cannot half-match. The database needs an id that is unique and stable; a person needs one
-they can quote in an email subject and search a mailbox for. Those are
-different jobs, and one value does both badly.
+Clients and orders each carry a short reference alongside their cuid primary
+key — `HWC00042` and `ORD00000042`. The database needs an id that is unique and
+stable; a person needs one they can quote in an email subject and search a
+mailbox for. Those are different jobs, and one value does both badly. Letters
+and digits with no separator, so each is one unbroken token a mailbox search
+cannot half-match, and orders are padded wider than clients so the two cannot
+be misread for one another.
 
-Issued by taking the highest number in use and adding one
-([`code.ts`](src/lib/clients/code.ts)), **not** by counting rows: a deleted
-client never frees its number for someone else, because a reference that
-pointed at two clients over time would make the mail it was quoted in
-ambiguous. The number is read inside the same transaction that writes the
-client, so importing a CSV of new clients numbers them in sequence.
+Both come from one generator ([`codes.ts`](src/lib/codes.ts)), which takes the
+highest number in use and adds one — **not** a row count. A deleted record
+never frees its number: a reference that pointed at two records over time would
+make the correspondence quoting it ambiguous, which is the whole reason for
+having one. Padding is cosmetic; a series counts past it (`HWC99999` is
+followed by `HWC100000`) rather than wrapping, so it cannot run out. The next
+number is read inside the transaction that writes the record, so importing a
+CSV of new rows numbers them in sequence rather than issuing one repeatedly.
 
-It shows under the name in the list, beside the name on the client's page, and
-in their details. Searching accepts the full code, the bare number, or lower
-case — `HWC00003`, `00003` and `hwc00003` all find the same client.
+Order references are **issued, never typed** — the Order ID field shows the
+reference rather than accepting one. The projects importer still reads an Order
+ID column, but only to recognise a row as an existing order, which is what makes
+an exported file editable and re-importable; a blank one creates a new order
+with a fresh reference.
+
+A client's own number is a **separate field**, `clientReference`, because it is
+theirs: their PO number, in their format, and it is what their emails quote. It
+is never generated, validated or required — `4500123`, `PO/2026/0417` and
+`po-17b` are all stored exactly as given — and it is searchable, which is the
+entire point of keeping it. Header guessing keeps the two apart: a column headed
+"Order No." maps to our reference, while "PO", "Purchase Order" or "Buyer Ref"
+map to theirs.
+
+Client references show under the name in the list, beside the name on the
+client's page, and in their details. Searching accepts the full code, the bare
+number, or lower case — `HWC00003`, `00003` and `hwc00003` all find the same
+client.
+
+## Changing a client's status
+
+Status is the one field on a client that moves on its own schedule — a name or
+an address is corrected once, a status follows the relationship. Routing that
+through the edit form cost five clicks and two page loads for a single word, so
+the badge on the client's page is the control: press it, choose, done.
+
+It has its own server action rather than going through `updateClient`, which
+re-validates the whole record and rewrites the contact rows. That is a lot of
+machinery for one field, and it means a client whose contacts happen to fail
+validation can still have their status moved.
+
+The badge keeps its own colours as the trigger, so the row reads the same
+whether or not it can be changed, and the button names both the current status
+and what pressing it does — a bare badge reads as decoration to a screen reader.
+The Clients list stays read-only.
 
 ## Finances
 

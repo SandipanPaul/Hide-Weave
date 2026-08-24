@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Pencil, Trash2 } from "lucide-react";
-import { deleteClient, updateClient } from "../actions";
+import { deleteClient, setClientStatus, updateClient } from "../actions";
 import { ClientForm, type ClientFormValues } from "../client-form";
 import {
   AlertDialog,
@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ClientStatusBadge } from "@/components/status-badge";
+import { ClientStatusPicker } from "@/components/status-picker";
 import {
   DASH,
   DetailList,
@@ -143,7 +143,13 @@ export function ClientDetailsPanel({ client }: { client: ClientDetailView }) {
               )}
             </DetailRow>
             <DetailRow label="Status">
-              <ClientStatusBadge status={client.status} />
+              {/* Changed here directly — it moves far more often than anything
+                  else on this record, and did not deserve the edit form. */}
+              <ClientStatusPicker
+                clientId={client.id}
+                status={client.status}
+                setStatus={setClientStatus}
+              />
             </DetailRow>
             <DetailRow label="Contact person">{client.contactPerson || DASH}</DetailRow>
             <DetailRow label={client.phones.length > 1 ? "Phones" : "Phone"}>

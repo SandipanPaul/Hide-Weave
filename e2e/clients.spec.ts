@@ -142,4 +142,47 @@ test.describe("clients", () => {
     await page.getByLabel("Search clients").fill("nothing matches this");
     await expect(page.getByText(/No clients match/)).toBeVisible();
   });
+
+  test("changes a client's status without opening the edit form", async ({ page }) => {
+    const name = uniqueName("E2E Status Client");
+    await page.getByRole("button", { name: "Add client" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Name").fill(name);
+    await dialog.getByLabel(/Email/).first().fill("status@example.com");
+    await dialog.getByRole("button", { name: "Add client" }).click();
+    await dialog.waitFor({ state: "hidden" });
+
+    await page.getByLabel("Search clients").fill(name);
+    await page.getByRole("link", { name }).click();
+
+    // Two clicks, and no edit form in between.
+    await page.getByRole("button", { name: /^Status: Active/ }).click();
+    await page.getByRole("menuitem", { name: "Chasing" }).click();
+
+    await expect(page.getByRole("button", { name: /^Status: Chasing/ })).toBeVisible();
+    // It really persisted, not just re-rendered optimistically.
+    await page.reload();
+    await expect(page.getByRole("button", { name: /^Status: Chasing/ })).toBeVisible();
+
+    // And the list agrees.
+    await page.goto("/clients");
+    await page.getByLabel("Search clients").fill(name);
+    await expect(page.getByRole("row").filter({ hasText: name })).toContainText("Chasing");
+  });
+
+  test("the status control names where things stand, for a screen reader", async ({ page }) => {
+    await page.getByLabel("Search clients").fill("Konkan");
+    await page.getByRole("link", { name: "Konkan Marine Exports" }).click();
+
+    // A bare badge reads as decoration; this says what it is and what it does.
+    const trigger = page.getByRole("button", { name: /^Status: \w+\. Change it\.$/ });
+    await expect(trigger).toBeVisible();
+
+    // The current status is marked, so the menu shows where you are.
+    await trigger.click();
+    await expect(page.getByRole("menuitem", { name: "Active" })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+  });
 });
