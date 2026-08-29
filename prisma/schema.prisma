@@ -62,6 +62,9 @@ model Client {
   /// Phone numbers and email addresses, ordered. The first of each kind is
   /// treated as the primary one for lists and sorting.
   contacts  ClientContact[]
+  /// Bulk mailings this client was written to. Survives their deletion — see
+  /// CampaignRecipient.
+  mailings  CampaignRecipient[]
 
   @@index([deletedAt])
   @@index([name])
@@ -309,4 +312,127 @@ model RetainerReceipt {
   @@index([deletedAt])
   @@index([paidOn])
   @@index([currency])
+}
+
+/// One bulk mailing: a subject, a body, and the clients it went to.
+///
+/// The body is stored as it was typed, placeholders and all — `<name>` is
+/// substituted per recipient at send time, not before. Keeping the template
+/// rather than the expanded copies means the campaign still reads as one
+/// message, and the per-recipient text can always be re-derived.
+model Campaign {
+  id      String @id @default(cuid())
+  subject String
+  body    String
+
+  /// Addresses copied on every message, separated by commas. Visible to the
+  /// recipient, as a CC is. Null when nobody was copied.
+  ///
+  /// Stored as typed rather than as rows: this is one line of the message
+  /// header, the same for every copy, not a list of people the campaign is
+  /// tracking delivery to.
+  cc String?
+
+  /// "QUEUED" | "SENDING" | "COMPLETED" — see src/lib/enums.ts.
+  status String @default("QUEUED")
+
+  /// When the last recipient stopped being PENDING. Null while work remains.
+  finishedAt DateTime?
+
+  /// A failure that belongs to the campaign rather than to any one recipient —
+  /// wrong credentials, a dropped connection. When this is set the run stopped
+  /// early and the untouched recipients are still PENDING, waiting to resume.
+  error String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  recipients  CampaignRecipient[]
+  attachments CampaignAttachment[]
+
+  @@index([deletedAt])
+  @@index([createdAt])
+  @@index([status])
+}
+
+/// A file sent with every copy of one mailing.
+///
+/// This is the *record* of the file — its name, type and size. The bytes live
+/// on disk, in a file named by this row's `id`, because putting them here would
+/// copy every attached megabyte into all fourteen retained backups. See
+/// src/lib/mail/attachment-store.ts.
+///
+/// Kept after sending, so a campaign can be resumed, retried, and read back
+/// with the files it actually carried.
+model CampaignAttachment {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  /// The name the recipient sees. Taken from the upload, never generated.
+  filename    String
+  /// MIME type, so the recipient's mail client knows what it has.
+  contentType String
+  size        Int
+
+  /// Order the files were chosen in, so they arrive in that order.
+  position Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([campaignId])
+}
+
+/// One client's copy of one campaign.
+///
+/// The client's name and address are copied here rather than joined: mail that
+/// has left the building is a historical record, so deleting or renaming a
+/// client must not rewrite who was written to, or where. `clientId` is only a
+/// link back to the current record, and goes null if that record is removed.
+model CampaignRecipient {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  /// The address written to, as it stood when the campaign was queued.
+  email String
+  /// What `<name>` was replaced with — the contact person's first name, or the
+  /// company name when there is no contact person.
+  greeting String
+  /// The client's name at send time, for reading the log back.
+  clientName String
+
+  /// "PENDING" | "SENT" | "FAILED" — see src/lib/enums.ts.
+  status String @default("PENDING")
+  /// Why it failed, in the mail server's words. Null unless status is FAILED.
+  error  String?
+  sentAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([status])
+  @@index([clientId])
+}
+
+/// Settings the user edits in the app rather than in a file.
+///
+/// A key/value table rather than a column per setting: these are configuration,
+/// not data, and adding one should not mean a migration. There is exactly one
+/// row per key — see src/lib/mail/settings.ts for the ones that exist.
+///
+/// Secrets are stored encrypted, never in the clear. The database is copied
+/// wholesale by the weekly backup, so a plaintext password here would be a
+/// password in every backup file.
+model Setting {
+  key   String @id
+  value String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

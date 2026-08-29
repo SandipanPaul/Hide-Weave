@@ -2,21 +2,23 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Building2, FolderKanban, Users } from "lucide-react";
+import { BarChart3, Building2, FolderKanban, Mail, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
  * Ordered by how often each tab is opened, not by entity hierarchy: projects
  * are the daily unit of work, clients and exporters are master data consulted
  * while recording them, and finances is a periodic review of what it all
- * earned and cost. Left to right: the work, who it is for, who supplies it,
- * what came of it.
+ * earned and cost. Mail comes last: writing to everyone at once is an
+ * occasional job, not a daily one. Left to right: the work, who it is for, who
+ * supplies it, what came of it, and reaching out to them all.
  */
 const TABS = [
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/clients", label: "Clients", icon: Users },
   { href: "/exporters", label: "Exporters", icon: Building2 },
   { href: "/finances", label: "Finances", icon: BarChart3 },
+  { href: "/mail", label: "Mail", icon: Mail },
 ] as const;
 
 export function MainNav() {

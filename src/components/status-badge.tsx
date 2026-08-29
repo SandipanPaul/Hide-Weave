@@ -1,7 +1,9 @@
 import { Badge } from "@/components/ui/badge";
 import {
+  CAMPAIGN_STATUS_LABELS,
   CLIENT_STATUS_LABELS,
   PROJECT_STATUS_LABELS,
+  RECIPIENT_STATUS_LABELS,
   SAMPLING_STATUS_LABELS,
 } from "@/lib/enums";
 
@@ -37,4 +39,17 @@ export function SamplingStatusBadge({ status }: { status: string }) {
   const variant =
     status === "COMPLETED" ? "secondary" : status === "CANCELLED" ? "outline" : "default";
   return <Badge variant={variant}>{label(SAMPLING_STATUS_LABELS, status)}</Badge>;
+}
+
+export function CampaignStatusBadge({ status }: { status: string }) {
+  const variant = status === "COMPLETED" ? "secondary" : "default";
+  return <Badge variant={variant}>{label(CAMPAIGN_STATUS_LABELS, status)}</Badge>;
+}
+
+export function RecipientStatusBadge({ status }: { status: string }) {
+  // Failed is the one status worth interrupting a scan of the list for, so it
+  // is the only one that gets the loud variant.
+  const variant =
+    status === "FAILED" ? "destructive" : status === "SENT" ? "secondary" : "outline";
+  return <Badge variant={variant}>{label(RECIPIENT_STATUS_LABELS, status)}</Badge>;
 }

@@ -57,3 +57,9 @@ yarn-debug.log*
 !.yarn/versions
 
 Requirements.md
+
+# Mail attachment bytes. The database keeps the record of each file; the bytes
+# live here, beside the database, and are deliberately not in backups.
+prisma/attachments/
+attachments/
+

@@ -17,11 +17,16 @@ npm run dev            # http://localhost:3000
 
 `.env` needs three values:
 
-| Variable         | Purpose                                                    |
-| ---------------- | ---------------------------------------------------------- |
-| `DATABASE_URL`   | `file:./dev.db` for local SQLite                            |
-| `APP_PASSWORD`   | The single password that unlocks the app                    |
-| `SESSION_SECRET` | Random string, 16+ characters, signs the session cookie     |
+| Variable         | Purpose                                                  |
+| ---------------- | -------------------------------------------------------- |
+| `DATABASE_URL`   | `file:./dev.db` for local SQLite                          |
+| `APP_PASSWORD`   | The single password that unlocks the app                  |
+| `SESSION_SECRET` | Random string, 16+ characters, signs the session cookie   |
+
+Mail credentials are **not** among them — they are entered in the app, under
+Mail → Settings, so a deployed server never needs editing by hand. The
+`MAIL_USER` / `MAIL_APP_PASSWORD` / `MAIL_FROM_NAME` variables still work as a
+fallback for an install already set up that way. See [Bulk mail](#bulk-mail).
 
 ## Scripts
 
@@ -31,7 +36,7 @@ npm run dev            # http://localhost:3000
 | `npm run build`     | Production build                              |
 | `npm run lint`      | ESLint                                        |
 | `npm run typecheck` | `tsc --noEmit`                                |
-| `npm test`          | Vitest unit tests                             |
+| `npm test`          | Vitest unit and component tests               |
 | `npm run test:e2e`  | Playwright end-to-end tests                   |
 | `npm run db:seed`   | Wipe and repopulate with sample data          |
 | `npm run db:reset`  | Drop, re-migrate and re-seed                  |
@@ -323,6 +328,232 @@ cannot honestly be one:
   order and stops at the commission owed, so it deliberately does *not* tie to
   the passbook, which is a record of cash inside one date range.
 
+## Bulk mail
+
+The Mail tab writes one message to many clients, personalised per recipient and
+sent one at a time.
+
+### How a mailing works
+
+1. **Compose.** Subject and body, with `<name>` wherever the recipient's name
+   belongs. Anything else is sent exactly as typed — there is no template
+   language and no markup beyond the line breaks.
+2. **Choose recipients.** Only clients with at least one email address appear.
+   Search and the status filters narrow what is *shown*; they never change what
+   is *selected*, so filtering to Active, ticking them, and clearing the filter
+   keeps them ticked. The count at the foot of the list is always the real
+   selection.
+3. **Add any addresses that are not clients**, in the *Also send to* box —
+   commas or new lines between them. `Jane Doe <jane@example.com>` says how to
+   greet them; a bare address has its greeting guessed from the local part
+   ("jane.doe@x.com" gives Jane, "info@x.com" gives Info), and every guess is
+   marked on screen so a poor one can be corrected before it goes. A mailing may
+   be entirely typed addresses with no client chosen at all.
+
+   An address that a chosen client already covers is dropped rather than sent a
+   second copy, and an entry that is not an address blocks sending rather than
+   being skipped — a mistyped address silently dropped means someone simply
+   never hears from you.
+4. **Copy anyone who should see it**, in *Copy to (CC)*. Visible to the client,
+   as a CC is. Each client gets their own message, so a CC address receives one
+   copy **per recipient** — a mailing to a hundred clients puts a hundred emails
+   in that inbox and counts as two hundred recipients against the day's limit.
+   The field says how many before you send.
+5. **Attach files, if any.** PDFs and images, up to 15 MB per mailing and 10 MB
+   per file. Every recipient gets their own copy of them, which the screen says
+   out loud — a 5 MB catalogue to a hundred clients is 500 MB pushed through
+   SMTP one message at a time, and that turns a two-minute mailing into a long
+   one.
+6. **Preview.** The first recipient's actual copy, rendered by the same
+   functions the sender uses (`src/lib/mail/template.ts`), so the preview cannot
+   promise something the send does not deliver.
+7. **Confirm.** The send is behind a dialog that states the number out loud.
+   This is the only button in the app whose effect leaves the building.
+
+The chosen clients are listed by name under the picker, not just counted — a
+number does not answer "who is this actually going to?", which is the check
+worth making before sending. Clicking a name removes it.
+
+**The confirmation dialog renders in a portal**, so the button inside it is not
+a DOM descendant of the form and a plain submit button silently does nothing.
+It calls `requestSubmit()` on the form instead. `compose-form.test.tsx` clicks
+it the way a person does, because typecheck, lint, unit tests and the
+production build were all clean while that button was completely dead.
+
+### What `<name>` becomes
+
+The contact person's first name, with any honorific stripped — "Mr. Daniel
+Okoro" greets Daniel. When a client has no contact person it falls back to the
+**whole** company name, never its first word: "Meridian Foods Ltd", not
+"Meridian". The recipient list shows each substitution before you send, so
+"Dear Meridian Foods Ltd" is something you catch here rather than in a reply.
+
+### Clients are marked as chasing
+
+When a message actually reaches a client, that client's status becomes CHASING —
+per recipient, as each send succeeds, so a failed one changes nothing and a
+resumed or retried campaign picks up where it left off.
+
+**Clients who are ACTIVE are deliberately left alone.** CHASING means "being
+pursued, has not ordered yet", so moving someone with live orders into it would
+misdescribe them and change what the Clients tab says at a glance. The rule is
+therefore "anything that is not ACTIVE becomes CHASING", expressed as the
+`where` of an `updateMany` rather than a read-then-write, so a status that
+changes underneath cannot be clobbered. Addresses typed in by hand have no
+client behind them and change nothing.
+
+
+### Attachments
+
+**The database keeps the record; the bytes live on disk.** Each
+`CampaignAttachment` row holds the filename, type and size, and its `id` is the
+name of the file in an `attachments/` directory beside the database — see
+`src/lib/mail/attachment-store.ts`. Set `ATTACHMENTS_DIR` to put it elsewhere.
+It sits beside the *data*, not beside the code, because a deploy replaces the
+checkout.
+
+**Attachments are therefore not in the backups.** That is deliberate, and it is
+the trade to be aware of: keeping the bytes in the database put every attached
+megabyte into all fourteen retained backups. An attachment is the payload of a
+mail that has already gone, not a business record like the ledger. A restored
+backup lists what was attached and cannot re-send it — and a campaign whose
+file is missing refuses to send rather than delivering a message written around
+a catalogue that is not there.
+
+Files are kept after sending, so a campaign can be resumed and retried, and are
+removed when the mailing is deleted.
+
+**Limits** live in `src/lib/mail/attachments.ts`: 15 MB per mailing, 10 MB per
+file, PDFs and images only. Gmail and Yahoo both cap a message at 25 MB, and
+base64 encoding adds about a third, so 15 MB of files is roughly 20 MB on the
+wire. The type list is an allow-list rather than "anything" because these go to
+clients from the user's own account, and mail carrying an unexpected executable
+is what damages a sender's reputation. Widening it is one line.
+
+`next.config.ts` raises the server action body limit to 20 MB. The default is
+1 MB, and the framework rejects the overflow before any of this app's own
+validation can explain why.
+
+
+### Sending, stopping and resuming
+
+Recipient rows are written to the database *before* the first message goes out,
+each one PENDING. The loop then takes the next PENDING row, sends, and marks it
+SENT or FAILED before moving on — see `src/lib/mail/send.ts`. Everything else
+follows from that:
+
+- **Nobody is written to twice.** Resume and Retry only ever touch rows that are
+  not SENT, so pressing either is safe at any time.
+- **A restart loses nothing.** Rows already sent are SENT; the rest are still
+  PENDING and Resume continues from there.
+- **A rejected address fails alone.** One bad address is marked FAILED with the
+  server's own message; the campaign carries on and still completes.
+- **A broken connection stops the run.** Wrong credentials or a dropped
+  connection park the campaign with the reason on it and leave the untouched
+  recipients PENDING — retrying them all against a dead transport would only
+  fail them all identically.
+- **Deleting a mailing stops it.** The loop re-checks each turn, so removing a
+  campaign aborts the rest. What has already gone cannot be recalled.
+
+The loop paces itself about a second between messages: Gmail throttles bursts,
+and a hundred clients still finish in under two minutes. The campaign page polls
+while a send is in flight, so progress appears on its own.
+
+### Setting it up
+
+Mail → **Settings**. Choose the account, give the address, the password, and the
+name to show as the sender. Then **Send a test to myself**, which sends one
+message to that same address and nowhere else — a wrong password otherwise
+surfaces halfway through a hundred-client mailing.
+
+| Account     | Server                | Port | Signs in with                               |
+| ----------- | --------------------- | ---- | ------------------------------------------- |
+| Gmail       | `smtp.gmail.com`      | 465  | App password (2-step verification required) |
+| Yahoo Mail  | `smtp.mail.yahoo.com` | 465  | App password                                |
+
+An app password is not the account password. Gmail issues them at
+`myaccount.google.com/apppasswords`, Yahoo under Account Security → Generate app
+password. Paste them with or without the spaces the provider shows; they are
+stripped.
+
+**Outlook is deliberately not supported.** Microsoft has withdrawn
+password-based SMTP from personal Outlook.com accounts, and the OAuth sign-in
+that replaces it requires the user to create and maintain their own Azure app
+registration — enough setup, and enough ways to get it subtly wrong, that it was
+not worth carrying. Adding a provider that does accept a password is a host and
+a port in `src/lib/mail/providers.ts`.
+
+**Where the credentials live.** Two sources, in this order:
+
+1. The `Setting` table, written from that page.
+2. The `MAIL_USER` / `MAIL_APP_PASSWORD` / `MAIL_FROM_NAME` environment
+   variables, plus `MAIL_PROVIDER` (`gmail` | `yahoo`). An unrecognised
+   provider there falls back to Gmail rather than breaking the app.
+
+Saved settings win, because they are the ones a person can change on a deployed
+server without a shell. The environment variables remain so an install already
+configured that way keeps working, and so a server can be set up before it has
+ever been opened.
+
+**The password is stored encrypted** (AES-256-GCM, key derived from
+`SESSION_SECRET` with its own domain separation — see
+`src/lib/mail/secrets.ts`). The weekly backup copies the whole database, so a
+plaintext password there would be a password in every backup file; this way a
+leaked backup is not a leaked Gmail credential unless the `.env` leaked too. It
+is not protection against someone who already has the server.
+
+It is stored encrypted rather than hashed because it has to be *presented* to
+the mail server, not verified — so it is never shown back to the page either. The field
+is blank even when a password is saved, and leaving it blank means "keep the
+one you have". **Rotating `SESSION_SECRET` makes the stored password
+unrecoverable**; the settings page says so and asks for it again.
+
+### Why a mailing with attachments takes a while
+
+Measured, not guessed. Building the message is not the cost: encoding a 5 MB
+attachment takes about 150 ms, and the connection to Gmail is a ~35 ms TCP
+handshake plus ~145 ms of TLS.
+
+What costs is the multiplication. **Base64 turns 5 MB of files into 6.84 MB on
+the wire, and every recipient gets their own copy** — so a 5 MB catalogue to a
+hundred clients is roughly 684 MB pushed through one connection, one message at
+a time, plus the one-second pause between them. The compose screen says this
+before you send.
+
+`next dev` makes it much worse than production. Each poll of a running
+campaign's page re-renders the whole route on the server, in the same
+single-threaded process that is streaming the attachment — so the send and the
+page compete. The page therefore polls every five seconds rather than three,
+and not at all while the tab is hidden. **Judge sending speed from a production
+build, not from `next dev`.**
+
+The send loop logs a line per message — `[mail] sent to … in 1203ms` — plus the
+attachment size once per campaign. Read it in the `next dev` console or with
+`journalctl -u hide-weave -f`, and the answer stops being a guess.
+
+### Why the user's own mailbox
+
+Mail is sent through the user's own account over SMTP rather than through a
+sending service. That is what makes replies work normally — the client sees the
+address they already correspond with, replies land in the usual inbox, and a
+copy appears in that account's Sent folder without this app keeping its own. A
+transactional API (Resend and the like) would deliver better at volume, but
+needs a domain and SPF/DKIM records, and its mail would be invisible from the
+mailbox. Sending directly from the VPS was never an option: a fresh cloud IP has
+no sending reputation.
+
+Because it is plain SMTP, supporting a provider is a hostname and a port, not
+new code — see `src/lib/mail/providers.ts`. Personal Gmail and Yahoo accounts
+each cap the day's sending at around 500 messages.
+
+### Mailings are a record
+
+A sent message is history, in the same way a ledger entry is. `CampaignRecipient`
+therefore copies the client's name and address rather than joining to them, so
+deleting or renaming a client never rewrites who was written to or where. The
+`clientId` link goes null and the row stays.
+
+
 ## Website extraction
 
 Paste an exporter's URL and the app reads the site to pre-fill the add form.
@@ -561,6 +792,31 @@ Chart colours are defined twice, and **reversed** in dark mode. The ramp means
 "subtle at 1, prominent at 5", which in light is near-white to near-black; the
 dark block had originally been copied verbatim from light, which put the
 emphasis line in the darkest grey available on an almost-black background.
+
+## Tests
+
+Most tests here are pure logic against real data. Two kinds need more:
+
+**Against a real database.** `tests/helpers/temp-database.ts` builds an empty
+SQLite file in a temp directory by applying every migration in order, points
+`DATABASE_URL` at it, and clears the Prisma client that `src/lib/db.ts` caches
+on `globalThis`. Use it rather than writing the setup again — three files had
+their own copy, and one of them applied only the migrations whose *name* matched
+a keyword, so a later migration was silently skipped and those tests ran against
+a schema the app no longer had.
+
+**Against a real DOM.** `*.test.tsx` files render a component into jsdom and
+click it the way a person would, declaring `@vitest-environment jsdom` in a
+docblock so the rest of the suite stays on node.
+
+The DOM ones exist for one class of bug: behaviour that only breaks in a browser.
+`src/app/(app)/mail/new/compose-form.test.tsx` was written after the mailing
+Send button turned out to do nothing at all — its confirmation dialog renders in
+a portal, so the submit button was outside the form in the DOM. Typecheck, lint,
+every unit test and the production build were clean throughout. Reach for one of
+these whenever correctness depends on where something ends up in the DOM, on a
+portal, or on a click actually reaching a handler.
+
 
 ## Accessibility
 

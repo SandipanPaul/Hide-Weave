@@ -6,6 +6,7 @@ import {
   SAMPLING_STATUSES,
 } from "@/lib/enums";
 import { joinContacts, splitContacts } from "@/lib/contacts";
+import { MAIL_PROVIDERS } from "@/lib/mail/providers";
 import { resolveCountry } from "@/lib/countries";
 import { normalizeWebsite } from "@/lib/url";
 import type { ContactKind } from "@/lib/enums";
@@ -378,6 +379,65 @@ export function makeExpenseInputSchema(currency: string) {
 
 
 export type FieldErrors = Record<string, string[] | undefined>;
+
+/**
+ * One bulk mailing, as the compose form submits it.
+ *
+ * Clients are sent as ids rather than addresses: which address to use and what
+ * `<name>` becomes are decided on the server from the current client record, so
+ * a stale form cannot post a hand-edited address list. Addresses typed by hand
+ * are the exception, and are the only ones taken at face value.
+ *
+ * Neither list is required on its own — a mailing needs at least one recipient
+ * from either, which the action checks once both have been resolved.
+ */
+export const campaignInputSchema = z.object({
+  subject: z.string().trim().min(1, "Give the email a subject."),
+  body: z.string().trim().min(1, "Write the message before sending it."),
+  clientIds: z.array(z.string().min(1)),
+  /**
+   * Addresses typed by hand, as one string. Parsed rather than validated here:
+   * src/lib/mail/recipients.ts owns what counts as a recipient, and the compose
+   * screen shows the result of that same parse before anything is sent.
+   */
+  extraEmails: z.preprocess(blankToUndefined, z.string().optional()),
+  /** Addresses copied on every message. Parsed the same way as `extraEmails`. */
+  cc: z.preprocess(blankToUndefined, z.string().optional()),
+});
+
+export type CampaignInput = z.infer<typeof campaignInputSchema>;
+
+/**
+ * The mail credentials, as the settings form submits them.
+ *
+ * `password` is optional here rather than required, because leaving the field
+ * blank means "keep the one already saved" — the form has no way to show a
+ * stored password back, so it cannot round-trip it. Whether a blank is
+ * acceptable depends on whether one is already stored, which is a question for
+ * the action, not the schema.
+ *
+ * Whitespace is stripped from the password: Google and Yahoo both display app
+ * passwords in four groups of four, people paste them that way, and the spaces
+ * are not part of the password.
+ */
+export const mailSettingsSchema = z.object({
+  provider: optionalWithDefault(z.enum(MAIL_PROVIDERS).default("gmail")),
+  user: z.email("Enter the address mail should be sent from."),
+  fromName: z.preprocess(blankToUndefined, z.string().optional()),
+  password: z.preprocess(
+    (value) => {
+      if (typeof value !== "string") return undefined;
+      const stripped = value.replace(/\s+/g, "");
+      return stripped === "" ? undefined : stripped;
+    },
+    z
+      .string()
+      .min(8, "That looks too short for an app password. Check you pasted the whole thing.")
+      .optional(),
+  ),
+});
+
+export type MailSettingsInput = z.infer<typeof mailSettingsSchema>;
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }

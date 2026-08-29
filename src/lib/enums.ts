@@ -116,3 +116,29 @@ export const LEDGER_KIND_LABELS: Record<LedgerKind, string> = {
   RETAINER: "Retainer",
   EXPENSE: "Expense",
 };
+
+/**
+ * Where a bulk mailing stands.
+ *
+ * QUEUED is created but not started; SENDING is working through recipients;
+ * COMPLETED means nothing is PENDING any more — which is not the same as
+ * "everything arrived", since a campaign completes with failures in it. The
+ * per-recipient counts, not the campaign status, say whether it went well.
+ */
+export const CAMPAIGN_STATUSES = ["QUEUED", "SENDING", "COMPLETED"] as const;
+export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
+
+export const CAMPAIGN_STATUS_LABELS: Record<CampaignStatus, string> = {
+  QUEUED: "Queued",
+  SENDING: "Sending",
+  COMPLETED: "Completed",
+};
+
+export const RECIPIENT_STATUSES = ["PENDING", "SENT", "FAILED"] as const;
+export type RecipientStatus = (typeof RECIPIENT_STATUSES)[number];
+
+export const RECIPIENT_STATUS_LABELS: Record<RecipientStatus, string> = {
+  PENDING: "Pending",
+  SENT: "Sent",
+  FAILED: "Failed",
+};
