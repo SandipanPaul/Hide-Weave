@@ -36,7 +36,10 @@ function conflictFailure(
 ): ActionResult<never> {
   return conflict.matchedOn === "name"
     ? failure(nameMessage, "name")
-    : failure(`${conflict.name} already uses one of these email addresses.`, "email");
+    // "emails", plural: that is the field on clientInputSchema and the key the
+    // form reads. Naming it "email" put the message on a field nothing renders,
+    // so a rejected save looked like a button that did nothing at all.
+    : failure(`${conflict.name} already uses one of these email addresses.`, "emails");
 }
 
 function clientFormValues(formData: FormData) {
