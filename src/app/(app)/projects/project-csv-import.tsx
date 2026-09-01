@@ -12,7 +12,7 @@ import type { ProjectFormOptions } from "./project-form";
  *
  * A client component on purpose: the config carries a `validateRow` function,
  * which cannot cross the server/client boundary as a prop. The clients and
- * exporters it resolves names against are plain data, so those do cross.
+ * suppliers it resolves names against are plain data, so those do cross.
  */
 export function ProjectCsvImport({ options }: { options: ProjectFormOptions }) {
   const router = useRouter();
@@ -21,9 +21,9 @@ export function ProjectCsvImport({ options }: { options: ProjectFormOptions }) {
     () =>
       buildProjectImportConfig(
         options.clients.map((client) => ({ id: client.id, name: client.name })),
-        options.exporters.map((exporter) => ({
-          id: exporter.id,
-          name: exporter.companyName,
+        options.suppliers.map((supplier) => ({
+          id: supplier.id,
+          name: supplier.companyName,
         })),
       ),
     [options],

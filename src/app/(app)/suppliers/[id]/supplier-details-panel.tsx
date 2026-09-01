@@ -4,8 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Pencil, Trash2 } from "lucide-react";
-import { deleteExporter, updateExporter } from "../actions";
-import { ExporterForm, type ExporterFormValues } from "../exporter-form";
+import { deleteSupplier, updateSupplier } from "../actions";
+import { SupplierForm, type SupplierFormValues } from "../supplier-form";
 import { ReExtractDialog } from "./re-extract-dialog";
 import {
   AlertDialog,
@@ -19,6 +19,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { SupplierTypeBadges } from "@/components/status-badge";
 import {
   DASH,
   DetailList,
@@ -30,18 +31,18 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { displayHost } from "@/lib/url";
 
-export type ExporterDetailView = ExporterFormValues & {
+export type SupplierDetailView = SupplierFormValues & {
   id: string;
   projectCount: number;
 };
 
-export function ExporterDetailsPanel({ exporter }: { exporter: ExporterDetailView }) {
+export function SupplierDetailsPanel({ supplier }: { supplier: SupplierDetailView }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [isDeleting, startDelete] = useTransition();
 
-  const boundUpdate = updateExporter.bind(null, exporter.id);
-  const readableUrl = exporter.sourceUrl || exporter.website || null;
+  const boundUpdate = updateSupplier.bind(null, supplier.id);
+  const readableUrl = supplier.sourceUrl || supplier.website || null;
 
   return (
     <Card>
@@ -53,14 +54,14 @@ export function ExporterDetailsPanel({ exporter }: { exporter: ExporterDetailVie
                 extracted from, or failing that its website. */}
             {readableUrl ? (
               <ReExtractDialog
-                exporterId={exporter.id}
+                supplierId={supplier.id}
                 url={readableUrl}
                 current={{
-                  companyName: exporter.companyName,
-                  email: exporter.email,
-                  phone: exporter.phone,
-                  address: exporter.address,
-                  notes: exporter.notes,
+                  companyName: supplier.companyName,
+                  email: supplier.email,
+                  phone: supplier.phone,
+                  address: supplier.address,
+                  notes: supplier.notes,
                 }}
               />
             ) : null}
@@ -86,30 +87,30 @@ export function ExporterDetailsPanel({ exporter }: { exporter: ExporterDetailVie
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Delete {exporter.companyName}?</AlertDialogTitle>
+                  <AlertDialogTitle>Delete {supplier.companyName}?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    {exporter.projectCount > 0
-                      ? `This exporter will be hidden everywhere in the app. The ${exporter.projectCount} order${
-                          exporter.projectCount === 1 ? "" : "s"
+                    {supplier.projectCount > 0
+                      ? `This supplier will be hidden everywhere in the app. The ${supplier.projectCount} order${
+                          supplier.projectCount === 1 ? "" : "s"
                         } they are making are kept and simply lose this maker — an order that happened still happened.`
-                      : "This exporter will be hidden everywhere in the app."}
+                      : "This supplier will be hidden everywhere in the app."}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Keep exporter</AlertDialogCancel>
+                  <AlertDialogCancel>Keep supplier</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={() =>
                       startDelete(async () => {
-                        const result = await deleteExporter(exporter.id);
+                        const result = await deleteSupplier(supplier.id);
                         // A successful delete redirects, so only a failure
                         // ever returns here.
                         if (result && !result.ok) {
-                          toast.error(result.formErrors[0] ?? "Could not delete this exporter.");
+                          toast.error(result.formErrors[0] ?? "Could not delete this supplier.");
                         }
                       })
                     }
                   >
-                    Delete exporter
+                    Delete supplier
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -120,11 +121,11 @@ export function ExporterDetailsPanel({ exporter }: { exporter: ExporterDetailVie
 
       <CardContent>
         {editing ? (
-          <ExporterForm
+          <SupplierForm
             action={boundUpdate}
-            initialValues={exporter}
+            initialValues={supplier}
             submitLabel="Save changes"
-            successMessage="Exporter updated."
+            successMessage="Supplier updated."
             onCancel={() => setEditing(false)}
             onSuccess={() => {
               setEditing(false);
@@ -133,37 +134,40 @@ export function ExporterDetailsPanel({ exporter }: { exporter: ExporterDetailVie
           />
         ) : (
           <DetailList>
-            <DetailRow label="Contact person">{exporter.contactPerson || DASH}</DetailRow>
+            <DetailRow label="What they do">
+              <SupplierTypeBadges types={supplier.types} />
+            </DetailRow>
+            <DetailRow label="Contact person">{supplier.contactPerson || DASH}</DetailRow>
             <DetailRow label="Email">
-              {exporter.email ? <EmailLink value={exporter.email} /> : DASH}
+              {supplier.email ? <EmailLink value={supplier.email} /> : DASH}
             </DetailRow>
             <DetailRow label="Phone">
-              {exporter.phone ? <PhoneLink value={exporter.phone} /> : DASH}
+              {supplier.phone ? <PhoneLink value={supplier.phone} /> : DASH}
             </DetailRow>
             <DetailRow label="Website">
-              {exporter.website ? (
-                <ExternalLink href={exporter.website}>{displayHost(exporter.website)}</ExternalLink>
+              {supplier.website ? (
+                <ExternalLink href={supplier.website}>{displayHost(supplier.website)}</ExternalLink>
               ) : (
                 DASH
               )}
             </DetailRow>
             <DetailRow label="Address">
-              {exporter.address ? (
-                <span className="whitespace-pre-line">{exporter.address}</span>
+              {supplier.address ? (
+                <span className="whitespace-pre-line">{supplier.address}</span>
               ) : (
                 DASH
               )}
             </DetailRow>
-            {exporter.sourceUrl ? (
+            {supplier.sourceUrl ? (
               <DetailRow label="Read from">
-                <ExternalLink href={exporter.sourceUrl}>
-                  {displayHost(exporter.sourceUrl)}
+                <ExternalLink href={supplier.sourceUrl}>
+                  {displayHost(supplier.sourceUrl)}
                 </ExternalLink>
               </DetailRow>
             ) : null}
             <DetailRow label="Notes">
-              {exporter.notes ? (
-                <span className="whitespace-pre-line">{exporter.notes}</span>
+              {supplier.notes ? (
+                <span className="whitespace-pre-line">{supplier.notes}</span>
               ) : (
                 DASH
               )}

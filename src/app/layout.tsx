@@ -9,7 +9,7 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 
 export const metadata: Metadata = {
   title: "Hide & Weave",
-  description: "Clients, projects, exporters and the commission they earn.",
+  description: "Clients, projects, suppliers and the commission they earn.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

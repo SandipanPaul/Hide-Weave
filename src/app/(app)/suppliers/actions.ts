@@ -2,10 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { findExporterNameConflict, findWebsiteConflict } from "@/lib/exporters/queries";
+import { findSupplierNameConflict, findWebsiteConflict } from "@/lib/suppliers/queries";
 import { notDeleted, prisma } from "@/lib/db";
 import {
-  exporterInputSchema,
+  supplierInputSchema,
   failure,
   invalid,
   type ActionResult,
@@ -16,16 +16,19 @@ import {
  * validation is a convenience; this is the trust boundary.
  */
 
-function revalidateExporters(id?: string) {
-  revalidatePath("/exporters");
-  if (id) revalidatePath(`/exporters/${id}`);
-  // An exporter's name appears on every project it supplies.
+function revalidateSuppliers(id?: string) {
+  revalidatePath("/suppliers");
+  if (id) revalidatePath(`/suppliers/${id}`);
+  // A supplier's name appears on every project it supplies.
   revalidatePath("/projects");
 }
 
-function exporterFormValues(formData: FormData) {
+function supplierFormValues(formData: FormData) {
   return {
     companyName: formData.get("companyName"),
+    // getAll: the form renders one checkbox per type, all sharing this name,
+    // and a supplier is commonly more than one thing.
+    types: formData.getAll("types"),
     website: formData.get("website"),
     contactPerson: formData.get("contactPerson"),
     email: formData.get("email"),
@@ -37,7 +40,7 @@ function exporterFormValues(formData: FormData) {
 }
 
 /**
- * Two exporters with the same name or the same website are the same supplier
+ * Two suppliers with the same name or the same website are the same supplier
  * recorded twice. Both are checked app-side, scoped to non-deleted rows.
  */
 async function checkConflicts(
@@ -45,8 +48,8 @@ async function checkConflicts(
   website: string | undefined,
   excludeId?: string,
 ): Promise<ActionResult<never> | null> {
-  const byName = await findExporterNameConflict(companyName, excludeId);
-  if (byName) return failure("An exporter with this name already exists.", "companyName");
+  const byName = await findSupplierNameConflict(companyName, excludeId);
+  if (byName) return failure("A supplier with this name already exists.", "companyName");
 
   const byWebsite = await findWebsiteConflict(website, excludeId);
   if (byWebsite) {
@@ -55,45 +58,45 @@ async function checkConflicts(
   return null;
 }
 
-export async function createExporter(
+export async function createSupplier(
   _prev: ActionResult<{ id: string }> | null,
   formData: FormData,
 ): Promise<ActionResult<{ id: string }>> {
-  const parsed = exporterInputSchema.safeParse(exporterFormValues(formData));
+  const parsed = supplierInputSchema.safeParse(supplierFormValues(formData));
   if (!parsed.success) return invalid(parsed.error);
 
   const conflict = await checkConflicts(parsed.data.companyName, parsed.data.website);
   if (conflict) return conflict;
 
   try {
-    const exporter = await prisma.exporter.create({ data: parsed.data });
-    revalidateExporters(exporter.id);
-    return { ok: true, data: { id: exporter.id } };
+    const supplier = await prisma.supplier.create({ data: parsed.data });
+    revalidateSuppliers(supplier.id);
+    return { ok: true, data: { id: supplier.id } };
   } catch {
-    return failure("Could not save this exporter. Please try again.");
+    return failure("Could not save this supplier. Please try again.");
   }
 }
 
-export async function updateExporter(
+export async function updateSupplier(
   id: string,
   _prev: ActionResult<{ id: string }> | null,
   formData: FormData,
 ): Promise<ActionResult<{ id: string }>> {
-  const parsed = exporterInputSchema.safeParse(exporterFormValues(formData));
+  const parsed = supplierInputSchema.safeParse(supplierFormValues(formData));
   if (!parsed.success) return invalid(parsed.error);
 
-  const existing = await prisma.exporter.findFirst({
+  const existing = await prisma.supplier.findFirst({
     where: { id, ...notDeleted },
     select: { id: true },
   });
-  if (!existing) return failure("This exporter no longer exists.");
+  if (!existing) return failure("This supplier no longer exists.");
 
   const conflict = await checkConflicts(parsed.data.companyName, parsed.data.website, id);
   if (conflict) return conflict;
 
   try {
-    await prisma.exporter.update({ where: { id }, data: parsed.data });
-    revalidateExporters(id);
+    await prisma.supplier.update({ where: { id }, data: parsed.data });
+    revalidateSuppliers(id);
     return { ok: true, data: { id } };
   } catch {
     return failure("Could not save your changes. Please try again.");
@@ -101,30 +104,30 @@ export async function updateExporter(
 }
 
 /**
- * Soft-deletes an exporter.
+ * Soft-deletes a supplier.
  *
  * Projects sourced through them are kept and simply lose the reference — an
  * order that happened still happened, and deleting its supply-side record must
  * not remove it from any commission total.
  */
-export async function deleteExporter(id: string): Promise<ActionResult> {
-  const exporter = await prisma.exporter.findFirst({
+export async function deleteSupplier(id: string): Promise<ActionResult> {
+  const supplier = await prisma.supplier.findFirst({
     where: { id, ...notDeleted },
     select: { id: true, _count: { select: { allocations: { where: notDeleted } } } },
   });
-  if (!exporter) return failure("This exporter no longer exists.");
+  if (!supplier) return failure("This supplier no longer exists.");
 
   // The orders themselves are kept and simply lose this maker; their
   // quantities stay as they were, so the split shows as partly unassigned.
   const deletedAt = new Date();
   await prisma.$transaction([
-    prisma.projectExporter.updateMany({
-      where: { exporterId: id, ...notDeleted },
+    prisma.projectSupplier.updateMany({
+      where: { supplierId: id, ...notDeleted },
       data: { deletedAt },
     }),
-    prisma.exporter.update({ where: { id }, data: { deletedAt } }),
+    prisma.supplier.update({ where: { id }, data: { deletedAt } }),
   ]);
 
-  revalidateExporters();
-  redirect("/exporters");
+  revalidateSuppliers();
+  redirect("/suppliers");
 }

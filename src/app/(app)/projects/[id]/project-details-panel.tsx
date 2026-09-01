@@ -29,7 +29,7 @@ export type ProjectDetailView = ProjectFormValues & {
   id: string;
   clientName: string;
   /** Who is making it, resolved for display. */
-  exporterNames: Array<{ id: string; name: string; quantity: number }>;
+  supplierNames: Array<{ id: string; name: string; quantity: number }>;
   orderValueDisplay: string;
   orderDateDisplay: string;
   expectedDeliveryDisplay: string | null;
@@ -52,7 +52,7 @@ export function ProjectDetailsPanel({
   const [isDeleting, startDelete] = useTransition();
 
   const boundUpdate = updateProject.bind(null, project.id);
-  const assigned = project.exporterNames.reduce((total, maker) => total + maker.quantity, 0);
+  const assigned = project.supplierNames.reduce((total, maker) => total + maker.quantity, 0);
   const unassigned = Number(project.quantity) - assigned;
 
   return (
@@ -138,15 +138,15 @@ export function ProjectDetailsPanel({
                 {project.clientName}
               </Link>
             </DetailRow>
-            <DetailRow label={project.exporterNames.length > 1 ? "Exporters" : "Exporter"}>
-              {project.exporterNames.length === 0 ? (
+            <DetailRow label={project.supplierNames.length > 1 ? "Suppliers" : "Supplier"}>
+              {project.supplierNames.length === 0 ? (
                 DASH
               ) : (
                 <ul className="space-y-0.5">
-                  {project.exporterNames.map((maker) => (
+                  {project.supplierNames.map((maker) => (
                     <li key={maker.id} className="flex justify-between gap-3">
                       <Link
-                        href={`/exporters/${maker.id}`}
+                        href={`/suppliers/${maker.id}`}
                         className={cn("min-w-0 truncate", LINK_CLASS)}
                       >
                         {maker.name}

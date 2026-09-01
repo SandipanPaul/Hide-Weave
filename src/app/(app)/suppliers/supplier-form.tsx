@@ -2,14 +2,22 @@
 
 import { useState } from "react";
 import { Sparkles } from "lucide-react";
+import { CheckboxGroup } from "@/components/form/checkbox-group";
 import { TextAreaField, TextField } from "@/components/form/fields";
 import { FormActions, FormFields } from "@/components/form/form-shell";
 import { FormErrors } from "@/components/form/form-errors";
 import { useEntityForm, type EntityFormAction } from "@/components/form/use-entity-form";
-import { exporterInputSchema } from "@/lib/schemas";
+import {
+  SUPPLIER_TYPES,
+  SUPPLIER_TYPE_HINTS,
+  SUPPLIER_TYPE_LABELS,
+  type SupplierType,
+} from "@/lib/enums";
+import { supplierInputSchema } from "@/lib/schemas";
 
-export type ExporterFormValues = {
+export type SupplierFormValues = {
   companyName: string;
+  types: SupplierType[];
   website: string;
   contactPerson: string;
   email: string;
@@ -19,8 +27,9 @@ export type ExporterFormValues = {
   notes: string;
 };
 
-export const EMPTY_EXPORTER: ExporterFormValues = {
+export const EMPTY_SUPPLIER: SupplierFormValues = {
   companyName: "",
+  types: [],
   website: "",
   contactPerson: "",
   email: "",
@@ -30,7 +39,13 @@ export const EMPTY_EXPORTER: ExporterFormValues = {
   notes: "",
 };
 
-export type ExporterField = keyof ExporterFormValues;
+export type SupplierField = keyof SupplierFormValues;
+
+const TYPE_OPTIONS = SUPPLIER_TYPES.map((type) => ({
+  value: type,
+  label: SUPPLIER_TYPE_LABELS[type],
+  hint: SUPPLIER_TYPE_HINTS[type],
+}));
 
 /** Marks a value the app guessed rather than one the user typed. */
 function AutoFilled() {
@@ -49,9 +64,9 @@ function AutoFilled() {
  * clears the moment you edit that field — an extracted value is a suggestion
  * to check, never a fact.
  */
-export function ExporterForm({
+export function SupplierForm({
   action,
-  initialValues = EMPTY_EXPORTER,
+  initialValues = EMPTY_SUPPLIER,
   autoFilled,
   submitLabel,
   successMessage,
@@ -60,9 +75,9 @@ export function ExporterForm({
   scrollable = false,
 }: {
   action: EntityFormAction;
-  initialValues?: ExporterFormValues;
+  initialValues?: SupplierFormValues;
   /** Fields whose values came from extraction rather than from the user. */
-  autoFilled?: ReadonlyArray<ExporterField>;
+  autoFilled?: ReadonlyArray<SupplierField>;
   submitLabel: string;
   successMessage: string;
   onSuccess?: (id: string) => void;
@@ -71,14 +86,14 @@ export function ExporterForm({
 }) {
   const { formAction, values, setField, errorFor, serverErrors } = useEntityForm({
     action,
-    schema: exporterInputSchema,
+    schema: supplierInputSchema,
     initialValues,
     successMessage,
     onSuccess,
   });
   const [guessed, setGuessed] = useState<Set<string>>(new Set(autoFilled ?? []));
 
-  const set = (field: ExporterField) => (value: string) => {
+  const set = (field: SupplierField) => (value: string) => {
     setField(field)(value);
     // Editing a suggestion makes it yours.
     setGuessed((current) => {
@@ -89,7 +104,7 @@ export function ExporterForm({
     });
   };
 
-  const markFor = (field: ExporterField) => (guessed.has(field) ? <AutoFilled /> : undefined);
+  const markFor = (field: SupplierField) => (guessed.has(field) ? <AutoFilled /> : undefined);
 
   return (
     <form action={formAction} className="flex min-h-0 flex-1 flex-col gap-4" noValidate>
@@ -108,6 +123,16 @@ export function ExporterForm({
           onValueChange={set("companyName")}
           error={errorFor("companyName")}
           annotation={markFor("companyName")}
+        />
+
+        <CheckboxGroup
+          name="types"
+          label="What they do"
+          options={TYPE_OPTIONS}
+          values={values.types}
+          onChange={(types) => setField("types")(types)}
+          error={errorFor("types")}
+          hint="Several can be true — a tannery that also exports is common."
         />
 
         <div className="grid gap-4 @lg:grid-cols-2">

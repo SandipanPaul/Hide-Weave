@@ -24,7 +24,7 @@ export type ClientFormValues = {
   notes: string;
 };
 
-export const EMPTY_CLIENT: ClientFormValues = {
+const EMPTY_CLIENT: ClientFormValues = {
   name: "",
   address: "",
   country: "",

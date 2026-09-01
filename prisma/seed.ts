@@ -1,6 +1,6 @@
 /**
  * Seeds a realistic dataset so the dashboard has something to show on first
- * run: ~15 clients, ~10 exporters, ~50 projects across every status, ~80
+ * run: ~15 clients, ~10 suppliers, ~50 projects across every status, ~80
  * payments, and samplings spread across past and future.
  *
  * Deterministic: the PRNG is seeded with a constant, so re-running produces the
@@ -58,7 +58,7 @@ const CLIENTS = [
   ["Levant Food Group", "Amman, Jordan", "USD", "JO"],
 ] as const;
 
-const EXPORTERS = [
+const SUPPLIERS = [
   ["Sattva Agro Exports Pvt Ltd", "https://sattvaagro.example.com", "Ramesh Iyer", "Kochi, Kerala"],
   ["Deccan Spice Mills", "https://deccanspice.example.com", "Priya Nair", "Guntur, Andhra Pradesh"],
   ["Bharat Textiles & Weaves", "https://bharatweaves.example.com", "Anil Kumar", "Tiruppur, Tamil Nadu"],
@@ -125,7 +125,7 @@ async function main() {
   await prisma.clientContact.deleteMany();
   await prisma.clientSampling.deleteMany();
   await prisma.project.deleteMany();
-  await prisma.exporter.deleteMany();
+  await prisma.supplier.deleteMany();
   await prisma.client.deleteMany();
 
   console.log("Seeding clients…");
@@ -198,12 +198,12 @@ async function main() {
     );
   }
 
-  console.log("Seeding exporters…");
-  const exporters: Array<{ id: string; companyName: string }> = [];
-  for (const [companyName, website, contactPerson, address] of EXPORTERS) {
+  console.log("Seeding suppliers…");
+  const suppliers: Array<{ id: string; companyName: string }> = [];
+  for (const [companyName, website, contactPerson, address] of SUPPLIERS) {
     const slug = companyName.toLowerCase().replace(/[^a-z0-9]+/g, "");
-    exporters.push(
-      await prisma.exporter.create({
+    suppliers.push(
+      await prisma.supplier.create({
         data: {
           companyName,
           website,
@@ -221,7 +221,7 @@ async function main() {
   const projects = [];
   for (let i = 0; i < 50; i++) {
     const client = pick(clients);
-    const exporter = chance(0.85) ? pick(exporters) : null;
+    const supplier = chance(0.85) ? pick(suppliers) : null;
     const [product, unit] = pick(PRODUCTS);
     const status = pick(PROJECT_STATUSES);
 
@@ -246,19 +246,19 @@ async function main() {
     const quantity = randomInt(5, 4000);
 
     /**
-     * Most orders go to one exporter; some are split across two or three, the
+     * Most orders go to one supplier; some are split across two or three, the
      * way a large run gets shared out. A split never adds up to more than the
      * order, and sometimes adds up to less — work not yet placed.
      */
-    const makers = exporter
+    const makers = supplier
       ? chance(0.3)
-        ? [exporter, ...Array.from({ length: randomInt(1, 2) }, () => pick(exporters))]
+        ? [supplier, ...Array.from({ length: randomInt(1, 2) }, () => pick(suppliers))]
             .filter((maker, index, all) => all.findIndex((m) => m.id === maker.id) === index)
-        : [exporter]
+        : [supplier]
       : [];
 
     const allocations = makers.map((maker, position) => ({
-      exporterId: maker.id,
+      supplierId: maker.id,
       position,
       // Split the quantity into roughly even parts, with the last taking the
       // remainder so the arithmetic always lands exactly.
@@ -272,7 +272,7 @@ async function main() {
       await prisma.project.create({
         data: {
           clientId: client.id,
-          exporters: { create: allocations },
+          suppliers: { create: allocations },
           product,
           unit,
           orderId: ORDER_CODES.format(2500 + i),
@@ -364,7 +364,7 @@ async function main() {
   }
 
   console.log(
-    `\nDone: ${clients.length} clients, ${exporters.length} exporters, ` +
+    `\nDone: ${clients.length} clients, ${suppliers.length} suppliers, ` +
       `${projects.length} projects, ${paymentCount} payments, ${samplingCount} samplings.`,
   );
 }

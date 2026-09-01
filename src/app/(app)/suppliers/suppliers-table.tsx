@@ -1,29 +1,31 @@
 import { TableLink } from "@/components/data-table/table-link";
+import { SupplierTypeBadges } from "@/components/status-badge";
 import { SortableHeader } from "@/components/data-table/sortable-header";
 import { TableShell } from "@/components/data-table/table-shell";
 import {
   TableBody,
   TableCell,
+  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
 import { displayHost } from "@/lib/url";
-import type { ExporterListRow } from "@/lib/exporters/queries";
+import type { SupplierListRow } from "@/lib/suppliers/queries";
 import type { ListParams, Pagination } from "@/lib/list-params";
 
-const PATH = "/exporters";
+const PATH = "/suppliers";
 
-export function ExportersTable({
+export function SuppliersTable({
   rows,
   pagination,
   params,
 }: {
-  rows: ExporterListRow[];
+  rows: SupplierListRow[];
   pagination: Pagination;
   params: ListParams;
 }) {
   return (
-    <TableShell pagination={pagination} params={params} pathname={PATH} unit="exporters">
+    <TableShell pagination={pagination} params={params} pathname={PATH} unit="suppliers">
       <TableHeader>
         <TableRow>
           <SortableHeader
@@ -32,6 +34,7 @@ export function ExportersTable({
             params={params}
             pathname={PATH}
           />
+          <TableHead>What they do</TableHead>
           <SortableHeader
             column="contactPerson"
             label="Contact person"
@@ -57,10 +60,14 @@ export function ExportersTable({
           <TableRow key={row.id}>
             <TableCell className="font-medium">
               <TableLink
-                href={`/exporters/${row.id}`}
+                href={`/suppliers/${row.id}`}
               >
                 {row.companyName}
               </TableLink>
+            </TableCell>
+
+            <TableCell>
+              <SupplierTypeBadges types={row.types} />
             </TableCell>
 
             <TableCell className="max-w-[16ch] truncate text-muted-foreground">

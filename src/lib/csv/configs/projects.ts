@@ -9,7 +9,7 @@ import type { ImportConfig, MappedRow, RowIssue } from "../types";
  *
  * Unlike Clients, a project row points at other records: the client is named
  * in the file, not identified. Names are resolved against the clients and
- * exporters already on file, which is why this is a factory rather than a
+ * suppliers already on file, which is why this is a factory rather than a
  * constant — the caller supplies the lists, so the preview can say "no client
  * called Meridian Foods" while you are still looking at the file, rather than
  * failing at import time.
@@ -35,7 +35,7 @@ function indexByName(records: NamedRecord[]): Map<string, NamedRecord> {
 /** The schema names the references by id; the CSV names them by name. */
 export function projectCsvColumnFor(field: string): string {
   if (field === "clientId") return "clientName";
-  if (field === "exporterId") return "exporterName";
+  if (field === "supplierId") return "supplierName";
   return field;
 }
 
@@ -47,11 +47,11 @@ export function projectCsvColumnFor(field: string): string {
 export function projectRowInput(
   mapped: MappedRow,
   clientId: string | undefined,
-  exporters: Array<{ exporterId: string; quantity: number }>,
+  suppliers: Array<{ supplierId: string; quantity: number }>,
 ) {
   return {
     clientId: clientId ?? "",
-    exporters,
+    suppliers,
     product: mapped.product ?? "",
     clientReference: mapped.clientReference,
     // Required numbers are passed as "" so the schema reports its own message
@@ -71,12 +71,12 @@ export function projectRowInput(
 
 export type ResolvedReferences = {
   clientId?: string;
-  exporters: Array<{ exporterId: string; quantity: number }>;
+  suppliers: Array<{ supplierId: string; quantity: number }>;
   issues: RowIssue[];
 };
 
 /**
- * One exporter's entry in the Exporter column: a name, optionally followed by
+ * One supplier's entry in the Supplier column: a name, optionally followed by
  * how much of the order they are making.
  *
  *   Konkan Marine Exports              the whole order
@@ -85,7 +85,7 @@ export type ResolvedReferences = {
  * Semicolons and newlines separate entries. Commas do not — company names are
  * full of them ("Kutch Salt & Minerals, Bhuj").
  */
-function splitExporterCell(raw: string): Array<{ name: string; quantity?: string }> {
+function splitSupplierCell(raw: string): Array<{ name: string; quantity?: string }> {
   return raw
     .split(/[;\r\n]+/)
     .map((part) => part.trim())
@@ -106,7 +106,7 @@ function splitExporterCell(raw: string): Array<{ name: string; quantity?: string
 export function resolveReferences(
   mapped: MappedRow,
   clients: Map<string, NamedRecord>,
-  exporters: Map<string, NamedRecord>,
+  suppliers: Map<string, NamedRecord>,
 ): ResolvedReferences {
   const issues: RowIssue[] = [];
   let clientId: string | undefined;
@@ -123,15 +123,15 @@ export function resolveReferences(
     }
   }
 
-  const allocations: Array<{ exporterId: string; quantity: number }> = [];
-  const entries = mapped.exporterName ? splitExporterCell(mapped.exporterName) : [];
+  const allocations: Array<{ supplierId: string; quantity: number }> = [];
+  const entries = mapped.supplierName ? splitSupplierCell(mapped.supplierName) : [];
 
   for (const entry of entries) {
-    const match = exporters.get(lookupKey(entry.name));
+    const match = suppliers.get(lookupKey(entry.name));
     if (!match) {
       issues.push({
-        field: "exporterName",
-        message: `No exporter called \u201C${entry.name}\u201D. Leave the column blank to import without one.`,
+        field: "supplierName",
+        message: `No supplier called \u201C${entry.name}\u201D. Leave the column blank to import without one.`,
       });
       continue;
     }
@@ -142,8 +142,8 @@ export function resolveReferences(
       // when they are the only one named.
       if (entries.length > 1) {
         issues.push({
-          field: "exporterName",
-          message: `Give ${entry.name} a quantity, e.g. \u201C${entry.name}: 2000\u201D — the order is split between several exporters.`,
+          field: "supplierName",
+          message: `Give ${entry.name} a quantity, e.g. \u201C${entry.name}: 2000\u201D — the order is split between several suppliers.`,
         });
         continue;
       }
@@ -154,16 +154,16 @@ export function resolveReferences(
 
     if (!Number.isInteger(quantity) || quantity <= 0) {
       issues.push({
-        field: "exporterName",
+        field: "supplierName",
         message: `\u201C${entry.quantity ?? ""}\u201D is not a quantity for ${entry.name}.`,
       });
       continue;
     }
 
-    allocations.push({ exporterId: match.id, quantity });
+    allocations.push({ supplierId: match.id, quantity });
   }
 
-  return { clientId, exporters: allocations, issues };
+  return { clientId, suppliers: allocations, issues };
 }
 
 const FIELDS: ImportConfig["fields"] = [
@@ -253,9 +253,9 @@ const FIELDS: ImportConfig["fields"] = [
     hint: "3-letter code. Defaults to INR.",
   },
   {
-    key: "exporterName",
-    label: "Exporter",
-    aliases: ["exporter", "supplier", "suppliername", "vendor", "source"],
+    key: "supplierName",
+    label: "Supplier",
+    aliases: ["supplier", "supplier", "suppliername", "vendor", "source"],
     example: "Konkan Marine Exports",
     hint: "Optional. A name, or a split: \u201CAcme: 2000; Best Ltd: 3000\u201D.",
   },
@@ -295,14 +295,14 @@ const FIELDS: ImportConfig["fields"] = [
 ];
 
 /** Columns whose emptiness is not worth warning about on every row. */
-const QUIET_WHEN_EMPTY = new Set(["unit", "currency", "status", "exporterName", "notes"]);
+const QUIET_WHEN_EMPTY = new Set(["unit", "currency", "status", "supplierName", "notes"]);
 
 export function buildProjectImportConfig(
   clients: NamedRecord[],
-  exporters: NamedRecord[],
+  suppliers: NamedRecord[],
 ): ImportConfig {
   const clientIndex = indexByName(clients);
-  const exporterIndex = indexByName(exporters);
+  const supplierIndex = indexByName(suppliers);
 
   return {
     entityLabel: "projects",
@@ -312,11 +312,11 @@ export function buildProjectImportConfig(
       const errors: RowIssue[] = [];
       const warnings: RowIssue[] = [];
 
-      const references = resolveReferences(mapped, clientIndex, exporterIndex);
+      const references = resolveReferences(mapped, clientIndex, supplierIndex);
       errors.push(...references.issues);
 
       const parsed = projectInputSchema.safeParse(
-        projectRowInput(mapped, references.clientId, references.exporters),
+        projectRowInput(mapped, references.clientId, references.suppliers),
       );
 
       if (!parsed.success) {

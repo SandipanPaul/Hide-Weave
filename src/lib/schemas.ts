@@ -7,6 +7,7 @@ import {
 } from "@/lib/enums";
 import { joinContacts, splitContacts } from "@/lib/contacts";
 import { MAIL_PROVIDERS } from "@/lib/mail/providers";
+import { SUPPLIER_TYPES } from "@/lib/enums";
 import { resolveCountry } from "@/lib/countries";
 import { normalizeWebsite } from "@/lib/url";
 import type { ContactKind } from "@/lib/enums";
@@ -120,7 +121,7 @@ function optionalWithDefault<T extends z.ZodTypeAny>(schema: T) {
   return z.preprocess(blankToUndefined, schema);
 }
 
-export const currencySchema = optionalWithDefault(
+const currencySchema = optionalWithDefault(
   z
     .string()
     .trim()
@@ -214,10 +215,26 @@ export const samplingInputSchema = z.object({
 });
 
 
-// -------------------------------------------------------------- Exporter
+// -------------------------------------------------------------- Supplier
 
-export const exporterInputSchema = z.object({
+export const supplierInputSchema = z.object({
   companyName: z.string().trim().min(1, "Company name is required.").max(200),
+  /**
+   * What the supplier does, stored comma-separated.
+   *
+   * Several at once is normal — a tannery that also exports — so this comes in
+   * as repeated form fields and goes out as one string. Unknown values are
+   * dropped rather than rejected: a stale checkbox from an older page should
+   * not stop a save.
+   */
+  types: z.preprocess((value) => {
+    const chosen = new Set(
+      (Array.isArray(value) ? value : [value]).filter(
+        (entry): entry is string => typeof entry === "string",
+      ),
+    );
+    return SUPPLIER_TYPES.filter((type) => chosen.has(type)).join(",");
+  }, z.string()),
   website: optionalWebsite,
   contactPerson: optionalText,
   email: optionalEmail,
@@ -231,26 +248,26 @@ export const exporterInputSchema = z.object({
 // --------------------------------------------------------------- Project
 
 /**
- * Which exporters are making an order, and how much each is making.
+ * Which suppliers are making an order, and how much each is making.
  *
- * Rows with no exporter chosen are dropped rather than rejected: the form
+ * Rows with no supplier chosen are dropped rather than rejected: the form
  * always shows one empty row to type into, and an untouched one is not an
- * error. A row with an exporter but no quantity is an error — that is someone
+ * error. A row with a supplier but no quantity is an error — that is someone
  * who started and did not finish.
  */
-const exporterSplitSchema = z.preprocess(
+const supplierSplitSchema = z.preprocess(
   (value) => {
     if (!Array.isArray(value)) return [];
     return value.filter((row) => {
       if (!row || typeof row !== "object") return false;
-      const { exporterId, quantity } = row as Record<string, unknown>;
+      const { supplierId, quantity } = row as Record<string, unknown>;
       const blankQuantity = quantity === "" || quantity === null || quantity === undefined;
-      return !(String(exporterId ?? "") === "" && blankQuantity);
+      return !(String(supplierId ?? "") === "" && blankQuantity);
     });
   },
   z.array(
     z.object({
-      exporterId: z.string().min(1, "Choose an exporter, or clear the quantity."),
+      supplierId: z.string().min(1, "Choose a supplier, or clear the quantity."),
       quantity: z.coerce
         .number({ error: "Quantity must be a number." })
         .int("Quantity must be a whole number.")
@@ -262,7 +279,7 @@ const exporterSplitSchema = z.preprocess(
 export const projectInputSchema = z
   .object({
     clientId: z.string().min(1, "A client is required."),
-    exporters: exporterSplitSchema,
+    suppliers: supplierSplitSchema,
     product: z.string().trim().min(1, "Product is required.").max(200),
     // Whatever the client calls this order. Never validated for shape: a PO
     // number is theirs, and rejecting an unfamiliar one would be wrong.
@@ -288,22 +305,22 @@ export const projectInputSchema = z
     // The split is checked here rather than on the field, because it only
     // means anything against the project's own quantity.
     const seen = new Set<string>();
-    for (const [index, allocation] of data.exporters.entries()) {
-      if (seen.has(allocation.exporterId)) {
+    for (const [index, allocation] of data.suppliers.entries()) {
+      if (seen.has(allocation.supplierId)) {
         ctx.addIssue({
           code: "custom",
-          path: ["exporters", index, "exporterId"],
-          message: "This exporter is already on the order. Change their quantity instead.",
+          path: ["suppliers", index, "supplierId"],
+          message: "This supplier is already on the order. Change their quantity instead.",
         });
       }
-      seen.add(allocation.exporterId);
+      seen.add(allocation.supplierId);
     }
 
-    const allocated = data.exporters.reduce((total, item) => total + item.quantity, 0);
+    const allocated = data.suppliers.reduce((total, item) => total + item.quantity, 0);
     if (allocated > data.quantity) {
       ctx.addIssue({
         code: "custom",
-        path: ["exporters"],
+        path: ["suppliers"],
         message: `The split adds up to ${allocated.toLocaleString("en-IN")}, which is more than the order's ${data.quantity.toLocaleString("en-IN")}.`,
       });
     }

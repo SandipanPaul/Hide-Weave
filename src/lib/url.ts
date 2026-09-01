@@ -57,7 +57,7 @@ export function normalizeWebsite(input: string | null | undefined): string | nul
  * Comparison key for uniqueness: no scheme, no "www.", no trailing slash.
  *
  * So http://www.asianleather.com/ and https://asianleather.com are one
- * exporter, which is what matters when the same site arrives twice from two
+ * supplier, which is what matters when the same site arrives twice from two
  * different sources.
  */
 export function websiteKey(input: string | null | undefined): string {

@@ -58,8 +58,8 @@ export async function orderIdForClient(page: Page, client: string): Promise<stri
   return (await link.textContent())!.trim();
 }
 
-/** Signs in and navigates to the Exporters tab. */
-export async function signInAtExporters(page: Page) {
+/** Signs in and navigates to the Suppliers tab. */
+export async function signInAtSuppliers(page: Page) {
   await signIn(page);
-  await page.goto("/exporters");
+  await page.goto("/suppliers");
 }

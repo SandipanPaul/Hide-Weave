@@ -1,3 +1,10 @@
+/**
+ * Encryption for the credentials kept in the database.
+ *
+ * Named for the module it tests: it lived at settings.test.ts, which read as
+ * coverage of settings.ts and hid the fact that nothing tested the encryption
+ * directly. Settings themselves are covered by tests/mail-settings.test.ts.
+ */
 import { beforeEach, describe, expect, it } from "vitest";
 import { decryptSecret, encryptSecret } from "@/lib/mail/secrets";
 

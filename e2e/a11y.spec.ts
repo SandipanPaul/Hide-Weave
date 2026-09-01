@@ -128,7 +128,7 @@ async function findProblems(page: Page, scope = "body"): Promise<Finding[]> {
   }, scope);
 }
 
-const PAGES = ["/projects", "/clients", "/exporters", "/finances"];
+const PAGES = ["/projects", "/clients", "/suppliers", "/finances"];
 
 test.describe("accessibility", () => {
   test.beforeEach(async ({ page }) => {
@@ -157,7 +157,7 @@ test.describe("accessibility", () => {
     for (const [path, trigger] of [
       ["/clients", "Add client"],
       ["/projects", "Add project"],
-      ["/exporters", "Add exporter"],
+      ["/suppliers", "Add supplier"],
     ] as const) {
       await page.goto(path);
       await page.getByRole("button", { name: trigger }).click();

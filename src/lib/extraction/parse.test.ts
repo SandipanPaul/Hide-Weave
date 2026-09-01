@@ -8,22 +8,22 @@ import {
   findContactLink,
   jsonLdNodes,
   mergeExtracted,
-  parseExporter,
+  parseSupplier,
 } from "./parse";
 
 /**
- * Every test here runs against a page saved from a real exporter site. No
+ * Every test here runs against a page saved from a real supplier site. No
  * network: the fixtures are the contract, so a site redesign can never turn
  * this suite red for the wrong reason.
  */
 const fixture = (name: string) =>
   readFileSync(join(__dirname, "__fixtures__", `${name}.html`), "utf8");
 
-describe("parseExporter, against saved pages", () => {
+describe("parseSupplier, against saved pages", () => {
   it("reads a LocalBusiness block in preference to anything else", () => {
     // barakainternational.in publishes LocalBusiness with name, phone and a
     // PostalAddress, and has no mailto anywhere.
-    const result = parseExporter(fixture("barakainternational"));
+    const result = parseSupplier(fixture("barakainternational"));
 
     expect(result.companyName?.source).toBe("json-ld");
     // Not "Leather Goods Manufacturer in India", which is what the page's
@@ -48,7 +48,7 @@ describe("parseExporter, against saved pages", () => {
     expect(types).toContain("WebPage");
     expect(types).not.toContain("Organization");
 
-    const result = parseExporter(html);
+    const result = parseSupplier(html);
     expect(result.companyName?.source).toBe("meta");
     expect(result.companyName?.value).toMatch(/XL Enterprises/i);
     expect(result.email?.value).toBe("query@exelfashions.com");
@@ -57,7 +57,7 @@ describe("parseExporter, against saved pages", () => {
 
   it("takes the address from a mailto link when there is no structured data", () => {
     // asianleather.com has neither JSON-LD nor og tags.
-    const result = parseExporter(fixture("asianleather"));
+    const result = parseSupplier(fixture("asianleather"));
 
     expect(result.email).toEqual({ value: "mail@asianleather.com", source: "link" });
     expect(result.companyName?.source).toBe("title");
@@ -65,7 +65,7 @@ describe("parseExporter, against saved pages", () => {
   });
 
   it("reads both a mailto and a tel from a plain page", () => {
-    const result = parseExporter(fixture("nsleather"));
+    const result = parseSupplier(fixture("nsleather"));
 
     expect(result.email?.value).toBe("niranjansutradhar@nsleather.com");
     expect(result.email?.source).toBe("link");
@@ -75,7 +75,7 @@ describe("parseExporter, against saved pages", () => {
 
   it("prefers an Organization node over the page's own og tags", () => {
     // mushleather publishes both; the Organization is the business.
-    const result = parseExporter(fixture("mushleather"));
+    const result = parseSupplier(fixture("mushleather"));
 
     expect(result.companyName?.source).toBe("json-ld");
     expect(result.companyName?.value).toMatch(/mush/i);
@@ -87,7 +87,7 @@ describe("parseExporter, against saved pages", () => {
     const html = fixture("mushleather");
     expect(html).toContain("tel:++91");
 
-    const phone = parseExporter(html).phone;
+    const phone = parseSupplier(html).phone;
     // Either a real number found elsewhere, or nothing — never "++91".
     if (phone) expect(phone.value.replace(/\D/g, "").length).toBeGreaterThanOrEqual(7);
   });
@@ -97,7 +97,7 @@ describe("parseExporter, against saved pages", () => {
     // the only thing to read is the browser tab's text. It is still offered —
     // a name to correct beats an empty form — but it is labelled as a guess
     // from the title so it is obvious what it is.
-    const result = parseExporter(fixture("dugrosleatherindia"));
+    const result = parseSupplier(fixture("dugrosleatherindia"));
 
     expect(result.email).toBeUndefined();
     expect(result.phone).toBeUndefined();
@@ -108,7 +108,7 @@ describe("parseExporter, against saved pages", () => {
   it("refuses a placeholder title, but still reads a number out of the text", () => {
     // klasseleather.com's title is literally "Wordpress Site", and it has no
     // structured data, no og tags and no tel: link — just a number on the page.
-    const result = parseExporter(fixture("klasseleather"));
+    const result = parseSupplier(fixture("klasseleather"));
 
     expect(result.companyName).toBeUndefined();
     expect(result.phone?.source).toBe("text");
@@ -117,7 +117,7 @@ describe("parseExporter, against saved pages", () => {
 
   it("never returns an address belonging to the site's tooling", () => {
     for (const name of ["asianleather", "exelfashions", "mushleather", "nsleather"]) {
-      const email = parseExporter(fixture(name)).email?.value;
+      const email = parseSupplier(fixture(name)).email?.value;
       if (email) {
         expect(email).not.toMatch(/sentry|wixpress|example\.com|\.png$/);
       }

@@ -1,7 +1,7 @@
 import { LINK_CLASS } from "@/components/ui/link-styles";
 /**
  * The read view of a single record: a label column and a value column, one row
- * per field. Shared by the client, project and exporter detail pages so all
+ * per field. Shared by the client, project and supplier detail pages so all
  * three read the same way and a fix to one is a fix to all.
  */
 
@@ -36,7 +36,7 @@ const LINK = LINK_CLASS;
  * <wbr> is a break opportunity, not a character — copying the address still
  * yields the address, with no stray newline.
  */
-export function WrappableEmail({ value }: { value: string }) {
+function WrappableEmail({ value }: { value: string }) {
   const at = value.indexOf("@");
   if (at === -1) return <>{value}</>;
   return (

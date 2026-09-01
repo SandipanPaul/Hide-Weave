@@ -12,7 +12,7 @@ import { isAllowed } from "./robots";
  * the public internet.
  */
 
-export const USER_AGENT = "Mozilla/5.0 (compatible; HideAndWeave/1.0)";
+const USER_AGENT = "Mozilla/5.0 (compatible; HideAndWeave/1.0)";
 
 const TIMEOUT_MS = 10_000;
 const MAX_REDIRECTS = 3;

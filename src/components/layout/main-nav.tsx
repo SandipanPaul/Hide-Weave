@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Ordered by how often each tab is opened, not by entity hierarchy: projects
- * are the daily unit of work, clients and exporters are master data consulted
+ * are the daily unit of work, clients and suppliers are master data consulted
  * while recording them, and finances is a periodic review of what it all
  * earned and cost. Mail comes last: writing to everyone at once is an
  * occasional job, not a daily one. Left to right: the work, who it is for, who
@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 const TABS = [
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/clients", label: "Clients", icon: Users },
-  { href: "/exporters", label: "Exporters", icon: Building2 },
+  { href: "/suppliers", label: "Suppliers", icon: Building2 },
   { href: "/finances", label: "Finances", icon: BarChart3 },
   { href: "/mail", label: "Mail", icon: Mail },
 ] as const;

@@ -9,5 +9,5 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  return <RouteError error={error} reset={reset} label="exporters" />;
+  return <RouteError error={error} reset={reset} label="suppliers" />;
 }

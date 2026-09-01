@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTempDatabase, type TempDatabase } from "./helpers/temp-database";
+import { expectRenderedKeys, formData } from "./helpers/actions";
 
 /**
  * Rejected client saves, and where the message lands.
@@ -15,19 +16,14 @@ vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("next/navigation", () => ({ redirect: () => {} }));
 
 /** The field names the client form actually reads — clientInputSchema's keys. */
-const RENDERED_FIELDS = new Set(["name", "address", "country", "phones", "emails", "website", "contactPerson", "status", "fixedMonthly", "currency", "notes"]);
-
-function form(fields: Record<string, string | string[]>) {
-  const data = new FormData();
-  for (const [key, value] of Object.entries(fields)) {
-    for (const entry of Array.isArray(value) ? value : [value]) data.append(key, entry);
-  }
-  return data;
-}
+const RENDERED_FIELDS = [
+  "name", "address", "country", "phones", "emails", "website",
+  "contactPerson", "status", "fixedMonthly", "currency", "notes",
+] as const;
 
 async function createClient(fields: Record<string, string | string[]>) {
   const { createClient } = await import("@/app/(app)/clients/actions");
-  return createClient(null, form({ name: "Acme", status: "ACTIVE", currency: "INR", ...fields }));
+  return createClient(null, formData({ name: "Acme", status: "ACTIVE", currency: "INR", ...fields }));
 }
 
 beforeEach(() => {
@@ -52,7 +48,7 @@ describe("email conflicts", () => {
     const result = await updateClient(
       id,
       null,
-      form({
+      formData({
         name: "Shiro Matsushita",
         status: "ACTIVE",
         currency: "INR",
@@ -62,10 +58,9 @@ describe("email conflicts", () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      const fields = Object.keys(result.fieldErrors);
-      expect(fields).toContain("emails");
+      expect(Object.keys(result.fieldErrors)).toContain("emails");
       // The heart of it: every key must be one the form can display.
-      for (const field of fields) expect(RENDERED_FIELDS.has(field)).toBe(true);
+      expectRenderedKeys(result, RENDERED_FIELDS);
     }
   });
 
@@ -89,7 +84,7 @@ describe("email conflicts", () => {
     const result = await updateClient(
       id,
       null,
-      form({
+      formData({
         name: "Oakhide",
         status: "ACTIVE",
         currency: "INR",

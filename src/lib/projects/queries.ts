@@ -36,7 +36,7 @@ export type ProjectListRow = {
   quantity: number;
   unit: string;
   /** Who is making it, and how much each is making. May be empty. */
-  exporters: Array<{ id: string; companyName: string; quantity: number }>;
+  suppliers: Array<{ id: string; companyName: string; quantity: number }>;
   orderValue: bigint;
   commissionPercentage: number;
   commission: bigint;
@@ -85,8 +85,8 @@ function searchWhere(q: string) {
       // Their PO number — the reference a client actually quotes at you.
       { clientReference: { contains: q } },
       { client: { name: { contains: q } } },
-      // Any exporter working on the order, not just the first.
-      { exporters: { some: { ...notDeleted, exporter: { companyName: { contains: q } } } } },
+      // Any supplier working on the order, not just the first.
+      { suppliers: { some: { ...notDeleted, supplier: { companyName: { contains: q } } } } },
     ],
   };
 }
@@ -105,20 +105,20 @@ const LIST_SELECT = {
   status: true,
   orderDate: true,
   client: { select: { name: true } },
-  exporters: {
+  suppliers: {
     where: notDeleted,
     orderBy: { position: "asc" },
-    select: { quantity: true, exporter: { select: { id: true, companyName: true } } },
+    select: { quantity: true, supplier: { select: { id: true, companyName: true } } },
   },
 } as const;
 
 /** The split, flattened for rendering. */
-type AllocationRow = { quantity: number; exporter: { id: string; companyName: string } };
+type AllocationRow = { quantity: number; supplier: { id: string; companyName: string } };
 
-function toExporters(allocations: AllocationRow[]) {
+function toSuppliers(allocations: AllocationRow[]) {
   return allocations.map((allocation) => ({
-    id: allocation.exporter.id,
-    companyName: allocation.exporter.companyName,
+    id: allocation.supplier.id,
+    companyName: allocation.supplier.companyName,
     quantity: allocation.quantity,
   }));
 }
@@ -139,7 +139,7 @@ function toRow(project: {
   status: string;
   orderDate: Date;
   client: { name: string };
-  exporters: AllocationRow[];
+  suppliers: AllocationRow[];
 }): ProjectListRow {
   return {
     id: project.id,
@@ -147,7 +147,7 @@ function toRow(project: {
     product: project.product,
     clientId: project.clientId,
     clientName: project.client.name,
-    exporters: toExporters(project.exporters),
+    suppliers: toSuppliers(project.suppliers),
     quantity: project.quantity,
     unit: project.unit,
     orderValue: project.orderValue,
@@ -250,13 +250,13 @@ export async function getProject(id: string) {
     where: { id, ...notDeleted },
     include: {
       client: { select: { id: true, name: true, currency: true } },
-      exporters: {
+      suppliers: {
         where: notDeleted,
         orderBy: { position: "asc" },
         select: {
           id: true,
           quantity: true,
-          exporter: { select: { id: true, companyName: true } },
+          supplier: { select: { id: true, companyName: true } },
         },
       },
       payments: { where: notDeleted, orderBy: { paidOn: "asc" } },
@@ -271,21 +271,21 @@ export async function getProject(id: string) {
   };
 }
 
-/** Clients and exporters for the form's pickers and the list's filter. */
+/** Clients and suppliers for the form's pickers and the list's filter. */
 export async function getProjectFormOptions() {
-  const [clients, exporters] = await Promise.all([
+  const [clients, suppliers] = await Promise.all([
     prisma.client.findMany({
       where: notDeleted,
       select: { id: true, name: true, currency: true },
       orderBy: { name: "asc" },
     }),
-    prisma.exporter.findMany({
+    prisma.supplier.findMany({
       where: notDeleted,
       select: { id: true, companyName: true },
       orderBy: { companyName: "asc" },
     }),
   ]);
-  return { clients, exporters };
+  return { clients, suppliers };
 }
 
 /**

@@ -34,7 +34,7 @@ export function cleanupE2ERows(): number {
         WHERE projectId IN (SELECT id FROM Project WHERE clientId IN (SELECT id FROM Client WHERE name LIKE 'E2E %'))`,
     ).run();
     db.prepare(
-      `DELETE FROM ProjectExporter
+      `DELETE FROM ProjectSupplier
         WHERE projectId IN (SELECT id FROM Project WHERE clientId IN (SELECT id FROM Client WHERE name LIKE 'E2E %'))`,
     ).run();
     db.prepare(
@@ -55,13 +55,13 @@ export function cleanupE2ERows(): number {
         WHERE clientId IN (SELECT id FROM Client WHERE name LIKE 'E2E %')`,
     ).run();
 
-    // An exporter is linked to projects through allocations, which go with
-    // the exporter; the orders themselves are somebody else's to clean up.
+    // An supplier is linked to projects through allocations, which go with
+    // the supplier; the orders themselves are somebody else's to clean up.
     db.prepare(
-      `DELETE FROM ProjectExporter
-        WHERE exporterId IN (SELECT id FROM Exporter WHERE companyName LIKE 'E2E %')`,
+      `DELETE FROM ProjectSupplier
+        WHERE supplierId IN (SELECT id FROM Supplier WHERE companyName LIKE 'E2E %')`,
     ).run();
-    db.prepare(`DELETE FROM Exporter WHERE companyName LIKE 'E2E %'`).run();
+    db.prepare(`DELETE FROM Supplier WHERE companyName LIKE 'E2E %'`).run();
 
     const result = db.prepare(`DELETE FROM Client WHERE name LIKE 'E2E %'`).run();
     return result.changes;

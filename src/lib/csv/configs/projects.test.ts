@@ -6,12 +6,12 @@ const CLIENTS = [
   { id: "cl-1", name: "Meridian Foods Ltd" },
   { id: "cl-2", name: "Konkan Marine Exports" },
 ];
-const EXPORTERS = [
+const SUPPLIERS = [
   { id: "ex-1", name: "Gujarat Spice Works" },
   { id: "ex-2", name: "Rann Leather Co" },
 ];
 
-const config = buildProjectImportConfig(CLIENTS, EXPORTERS);
+const config = buildProjectImportConfig(CLIENTS, SUPPLIERS);
 
 /** A row that should import cleanly, for tests to break one field at a time. */
 const validRow = {
@@ -50,13 +50,13 @@ describe("project import validation", () => {
     expect(messages[0]).not.toContain("required");
   });
 
-  it("refuses an unknown exporter rather than silently importing without one", () => {
-    const messages = messagesFor({ ...validRow, exporterName: "Nobody Ltd" }, "exporterName");
-    expect(messages[0]).toContain("No exporter called");
+  it("refuses an unknown supplier rather than silently importing without one", () => {
+    const messages = messagesFor({ ...validRow, supplierName: "Nobody Ltd" }, "supplierName");
+    expect(messages[0]).toContain("No supplier called");
   });
 
-  it("imports without an exporter when the column is blank", () => {
-    expect(check({ ...validRow, exporterName: undefined }).errors).toEqual([]);
+  it("imports without a supplier when the column is blank", () => {
+    expect(check({ ...validRow, supplierName: undefined }).errors).toEqual([]);
   });
 
   it("reports schema errors against the CSV column, not the schema field", () => {
@@ -132,20 +132,20 @@ describe("project header guessing", () => {
       "Total Value": "orderValue",
       "Comm %": "commissionPercentage",
       "PO Date": "orderDate",
-      Supplier: "exporterName",
+      Supplier: "supplierName",
     });
   });
 });
 
-describe("the exporter column", () => {
-  const withExporter = (exporterName: string, quantity = "1000") =>
-    config.validateRow({ ...validRow, quantity, exporterName }, [
+describe("the supplier column", () => {
+  const withSupplier = (supplierName: string, quantity = "1000") =>
+    config.validateRow({ ...validRow, quantity, supplierName }, [
       ...Object.keys(validRow),
-      "exporterName",
+      "supplierName",
     ]);
 
-  it("gives a lone named exporter the whole order", () => {
-    expect(withExporter("Gujarat Spice Works").errors).toEqual([]);
+  it("gives a lone named supplier the whole order", () => {
+    expect(withSupplier("Gujarat Spice Works").errors).toEqual([]);
   });
 
   it("reads a split written as name and quantity", () => {
@@ -154,9 +154,9 @@ describe("the exporter column", () => {
       {
         ...validRow,
         quantity: "5000",
-        exporterName: "Gujarat Spice Works: 2000; Rann Leather Co: 3000",
+        supplierName: "Gujarat Spice Works: 2000; Rann Leather Co: 3000",
       },
-      [...Object.keys(validRow), "exporterName"],
+      [...Object.keys(validRow), "supplierName"],
     );
     expect(result.errors).toEqual([]);
   });
@@ -166,38 +166,38 @@ describe("the exporter column", () => {
       {
         ...validRow,
         quantity: "1000",
-        exporterName: "Gujarat Spice Works: 800; Rann Leather Co: 800",
+        supplierName: "Gujarat Spice Works: 800; Rann Leather Co: 800",
       },
-      [...Object.keys(validRow), "exporterName"],
+      [...Object.keys(validRow), "supplierName"],
     );
     expect(result.errors.map((i) => i.message).join(" ")).toMatch(/more than/);
   });
 
-  it("asks for quantities once more than one exporter is named", () => {
+  it("asks for quantities once more than one supplier is named", () => {
     const result = config.validateRow(
-      { ...validRow, exporterName: "Gujarat Spice Works; Rann Leather Co" },
-      [...Object.keys(validRow), "exporterName"],
+      { ...validRow, supplierName: "Gujarat Spice Works; Rann Leather Co" },
+      [...Object.keys(validRow), "supplierName"],
     );
     expect(result.errors[0].message).toMatch(/Give .* a quantity/);
   });
 
   it("does not split on commas, which company names contain", () => {
-    // "Kutch Salt & Minerals, Bhuj" is one exporter, not two.
-    const result = withExporter("Nobody, Somewhere");
+    // "Kutch Salt & Minerals, Bhuj" is one supplier, not two.
+    const result = withSupplier("Nobody, Somewhere");
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0].message).toContain("Nobody, Somewhere");
   });
 
   it("ignores thousands separators in a quantity", () => {
     const result = config.validateRow(
-      { ...validRow, quantity: "5000", exporterName: "Gujarat Spice Works: 2,500" },
-      [...Object.keys(validRow), "exporterName"],
+      { ...validRow, quantity: "5000", supplierName: "Gujarat Spice Works: 2,500" },
+      [...Object.keys(validRow), "supplierName"],
     );
     expect(result.errors).toEqual([]);
   });
 
   it("names a quantity it cannot read", () => {
-    const result = withExporter("Gujarat Spice Works: lots");
+    const result = withSupplier("Gujarat Spice Works: lots");
     expect(result.errors[0].message).toMatch(/is not a quantity/);
   });
 });

@@ -17,7 +17,7 @@ type ProjectRow = {
   id: string;
   orderId: string;
   product: string;
-  /** This exporter's share of the order. */
+  /** This supplier's share of the order. */
   quantity: number;
   /** The whole order, for context. */
   projectQuantity: number;
@@ -28,13 +28,13 @@ type ProjectRow = {
 };
 
 /**
- * The orders this exporter is making.
+ * The orders this supplier is making.
  *
  * Deliberately no money: what matters about a supplier is what they are
  * producing and whether it is on time. Value and commission belong to the
  * order, and are on the project's own page.
  */
-export function ExporterProjects({ projects }: { projects: ProjectRow[] }) {
+export function SupplierProjects({ projects }: { projects: ProjectRow[] }) {
   return (
     <Card>
       <CardHeader>
@@ -46,7 +46,7 @@ export function ExporterProjects({ projects }: { projects: ProjectRow[] }) {
           <EmptyState
             icon={FolderKanban}
             title="No orders yet"
-            description="Orders naming this exporter as the supplier will appear here, with the value routed to them."
+            description="Orders naming this supplier as the supplier will appear here, with the value routed to them."
           />
         ) : (
           <>

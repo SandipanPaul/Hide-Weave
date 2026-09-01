@@ -29,11 +29,11 @@ import { projectInputSchema } from "@/lib/schemas";
  * validated again below before it reaches the database.
  */
 
-/** The clients and exporters a row may name, indexed for lookup. */
+/** The clients and suppliers a row may name, indexed for lookup. */
 async function loadReferenceIndexes() {
-  const [clients, exporters] = await Promise.all([
+  const [clients, suppliers] = await Promise.all([
     prisma.client.findMany({ where: notDeleted, select: { id: true, name: true } }),
-    prisma.exporter.findMany({ where: notDeleted, select: { id: true, companyName: true } }),
+    prisma.supplier.findMany({ where: notDeleted, select: { id: true, companyName: true } }),
   ]);
 
   const index = (records: NamedRecord[]) => {
@@ -47,8 +47,8 @@ async function loadReferenceIndexes() {
 
   return {
     clients: index(clients),
-    exporters: index(
-      exporters.map((exporter) => ({ id: exporter.id, name: exporter.companyName })),
+    suppliers: index(
+      suppliers.map((supplier) => ({ id: supplier.id, name: supplier.companyName })),
     ),
   };
 }
@@ -115,14 +115,14 @@ export async function importProjects(
   const outcome = await runImport(rows, decisions, async (tx, row, decision) => {
     // Resolve the named references again server-side: the browser's lookup
     // was a convenience, and the clients may have changed since.
-    const references = resolveReferences(row.mapped, indexes.clients, indexes.exporters);
+    const references = resolveReferences(row.mapped, indexes.clients, indexes.suppliers);
     const firstIssue = references.issues[0];
     if (firstIssue) {
       throw new ImportRowError(row.index, `${firstIssue.field}: ${firstIssue.message}`);
     }
 
     const parsed = projectInputSchema.safeParse(
-      projectRowInput(row.mapped, references.clientId, references.exporters),
+      projectRowInput(row.mapped, references.clientId, references.suppliers),
     );
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
@@ -133,8 +133,8 @@ export async function importProjects(
       );
     }
 
-    const { orderDate, expectedDelivery, actualDelivery, exporters, ...rest } = parsed.data;
-    const allocations = exporters.map((allocation, position) => ({ ...allocation, position }));
+    const { orderDate, expectedDelivery, actualDelivery, suppliers, ...rest } = parsed.data;
+    const allocations = suppliers.map((allocation, position) => ({ ...allocation, position }));
     const data = {
       ...rest,
       orderDate: dateOnlyToUtc(orderDate),
@@ -155,10 +155,10 @@ export async function importProjects(
         );
       }
       // The split is replaced wholesale, as it is on the edit form.
-      await tx.projectExporter.deleteMany({ where: { projectId: target.id } });
+      await tx.projectSupplier.deleteMany({ where: { projectId: target.id } });
       await tx.project.update({
         where: { id: target.id },
-        data: { ...data, exporters: { create: allocations } },
+        data: { ...data, suppliers: { create: allocations } },
       });
       return { outcome: "updated" };
     }
@@ -166,7 +166,7 @@ export async function importProjects(
     // Imported orders are issued a reference like any other; whatever the file
     // said is only ever used to find an existing one.
     await tx.project.create({
-      data: { ...data, orderId: await reserveOrderId(tx), exporters: { create: allocations } },
+      data: { ...data, orderId: await reserveOrderId(tx), suppliers: { create: allocations } },
     });
     return { outcome: "created" };
   });

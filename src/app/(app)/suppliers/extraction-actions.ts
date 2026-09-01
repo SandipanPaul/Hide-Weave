@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { extractFromWebsite } from "@/lib/extraction";
 import { notDeleted, prisma } from "@/lib/db";
-import { exporterInputSchema, formatZodError, type ActionResult } from "@/lib/schemas";
-import { findExporterNameConflict, findWebsiteConflict } from "@/lib/exporters/queries";
+import { supplierInputSchema, formatZodError, type ActionResult } from "@/lib/schemas";
+import { findSupplierNameConflict, findWebsiteConflict } from "@/lib/suppliers/queries";
 
 /**
  * Website extraction, as the browser sees it.
@@ -46,7 +46,7 @@ export type ExtractionResult =
       picked: PickedField[];
       finalUrl: string;
       alsoRead: string | null;
-      /** An existing exporter already using this site, if there is one. */
+      /** An existing supplier already using this site, if there is one. */
       existing: { id: string; companyName: string } | null;
     }
   | { ok: false; message: string };
@@ -68,7 +68,7 @@ const FIELD_LABELS: Record<string, string> = {
   notes: "Notes",
 };
 
-export async function extractExporter(rawUrl: string): Promise<ExtractionResult> {
+export async function extractSupplier(rawUrl: string): Promise<ExtractionResult> {
   const outcome = await extractFromWebsite(rawUrl);
   if (!outcome.ok) return { ok: false, message: outcome.message };
 
@@ -117,7 +117,7 @@ export async function extractExporter(rawUrl: string): Promise<ExtractionResult>
 }
 
 /**
- * Applies re-extracted values to an existing exporter, after the user has seen
+ * Applies re-extracted values to an existing supplier, after the user has seen
  * the diff and chosen what to accept.
  *
  * Validated with the same schema as every other write — the values passed in
@@ -127,7 +127,7 @@ export async function applyExtractedFields(
   id: string,
   values: Record<string, string>,
 ): Promise<ActionResult<{ id: string }>> {
-  const existing = await prisma.exporter.findFirst({
+  const existing = await prisma.supplier.findFirst({
     where: { id, ...notDeleted },
     select: {
       companyName: true,
@@ -141,7 +141,7 @@ export async function applyExtractedFields(
     },
   });
   if (!existing) {
-    return { ok: false, formErrors: ["This exporter no longer exists."], fieldErrors: {} };
+    return { ok: false, formErrors: ["This supplier no longer exists."], fieldErrors: {} };
   }
 
   // Only the accepted fields change; everything else keeps what it had.
@@ -156,23 +156,23 @@ export async function applyExtractedFields(
     notes: values.notes ?? existing.notes,
   };
 
-  const parsed = exporterInputSchema.safeParse(merged);
+  const parsed = supplierInputSchema.safeParse(merged);
   if (!parsed.success) {
     const { formErrors, fieldErrors } = formatZodError(parsed.error);
     return { ok: false, formErrors, fieldErrors };
   }
 
-  const nameConflict = await findExporterNameConflict(parsed.data.companyName, id);
+  const nameConflict = await findSupplierNameConflict(parsed.data.companyName, id);
   if (nameConflict) {
     return {
       ok: false,
       formErrors: [],
-      fieldErrors: { companyName: ["An exporter with this name already exists."] },
+      fieldErrors: { companyName: ["A supplier with this name already exists."] },
     };
   }
 
-  await prisma.exporter.update({ where: { id }, data: parsed.data });
-  revalidatePath("/exporters");
-  revalidatePath(`/exporters/${id}`);
+  await prisma.supplier.update({ where: { id }, data: parsed.data });
+  revalidatePath("/suppliers");
+  revalidatePath(`/suppliers/${id}`);
   return { ok: true, data: { id } };
 }

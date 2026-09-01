@@ -13,9 +13,13 @@ import { failure, invalid, mailSettingsSchema, type ActionResult } from "@/lib/s
  * back out to a page — the form only ever learns whether one is stored.
  */
 
-function revalidateMail() {
-  // Every mail page branches on whether mail is configured, so all of them are
-  // stale the moment this changes.
+/**
+ * Distinct from mail/actions.ts's `revalidateMail`, which refreshes one
+ * campaign: every mail page branches on whether mail is configured at all, so
+ * changing the credentials makes all of them stale at once. Named for what it
+ * does rather than sharing a name with something that does less.
+ */
+function revalidateAllMailPages() {
   revalidatePath("/mail", "layout");
 }
 
@@ -75,7 +79,7 @@ export async function updateMailSettings(
     return failure(explain(error));
   }
 
-  revalidateMail();
+  revalidateAllMailPages();
   return { ok: true, data: undefined };
 }
 
@@ -115,6 +119,6 @@ export async function forgetMailSettings(): Promise<ActionResult> {
   } catch {
     return failure("Could not clear these settings. Please try again.");
   }
-  revalidateMail();
+  revalidateAllMailPages();
   return { ok: true, data: undefined };
 }

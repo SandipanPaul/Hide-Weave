@@ -1,5 +1,5 @@
 import { ListSkeleton } from "@/components/layout/list-skeleton";
 
 export default function Loading() {
-  return <ListSkeleton label="exporters" />;
+  return <ListSkeleton label="suppliers" />;
 }

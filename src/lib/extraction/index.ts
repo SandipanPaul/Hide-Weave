@@ -2,8 +2,8 @@ import { ExtractionError, fetchPage, robotsAllows } from "./fetch";
 import {
   findContactLink,
   mergeExtracted,
-  parseExporter,
-  type ExtractedExporter,
+  parseSupplier,
+  type ExtractedSupplier,
 } from "./parse";
 import { isPrivateAddress } from "./net";
 import { normalizeWebsite } from "@/lib/url";
@@ -28,7 +28,7 @@ export type ExtractionOutcome =
       finalUrl: string;
       /** The second page consulted, when the homepage had no email. */
       alsoRead: string | null;
-      fields: ExtractedExporter;
+      fields: ExtractedSupplier;
     }
   | { ok: false; kind: string; message: string };
 
@@ -89,7 +89,7 @@ export async function extractFromWebsite(rawUrl: string): Promise<ExtractionOutc
     }
 
     const home = await fetchPage(url);
-    let fields = parseExporter(home.html);
+    let fields = parseSupplier(home.html);
     let alsoRead: string | null = null;
 
     // One extra fetch, and only to find an email the homepage did not carry.
@@ -98,7 +98,7 @@ export async function extractFromWebsite(rawUrl: string): Promise<ExtractionOutc
       if (contactUrl) {
         try {
           const contact = await fetchPage(contactUrl);
-          fields = mergeExtracted(fields, parseExporter(contact.html));
+          fields = mergeExtracted(fields, parseSupplier(contact.html));
           alsoRead = contact.url;
         } catch {
           // The contact page is a bonus; failing to read it is not a failure
@@ -127,4 +127,4 @@ export async function extractFromWebsite(rawUrl: string): Promise<ExtractionOutc
 }
 
 export { ExtractionError } from "./fetch";
-export type { ExtractedExporter, ExtractionSource } from "./parse";
+export type { ExtractedSupplier, ExtractionSource } from "./parse";

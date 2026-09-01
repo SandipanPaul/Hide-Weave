@@ -27,7 +27,7 @@ export const DEFAULT_CURRENCY = "INR";
 /** Currencies offered in pickers. Not a restriction — free text is accepted. */
 export const COMMON_CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SGD"] as const;
 
-export function minorDigits(currency: string): number {
+function minorDigits(currency: string): number {
   return MINOR_DIGITS[currency.toUpperCase()] ?? 2;
 }
 

@@ -8,7 +8,7 @@
 //     allowed values — see src/lib/enums.ts.
 //   * Money is `BigInt` (64-bit on SQLite, int8 on Postgres) so order values
 //     have no practical ceiling.
-//   * Uniqueness (Client.name, Project.orderId, Exporter.website) is enforced in
+//   * Uniqueness (Client.name, Project.orderId, Supplier.website) is enforced in
 //     server actions scoped to `deletedAt: null`, not by DB constraints — a soft
 //     deleted row must not permanently reserve a name.
 
@@ -114,9 +114,18 @@ model ClientSampling {
   @@index([status])
 }
 
-model Exporter {
+/// Someone we source from: a tannery, an exporter, an OEM factory, a private
+/// label maker — often several of those at once, which is why `types` is a
+/// list rather than a single value. Many Indian leather companies tan hides
+/// and export finished goods, and forcing a choice between the two would make
+/// the record wrong.
+model Supplier {
   id            String  @id @default(cuid())
   companyName   String
+  /// Comma-separated values from SUPPLIER_TYPES in src/lib/enums.ts, e.g.
+  /// "TANNERY,EXPORTER". Empty when nobody has said yet — an unclassified
+  /// supplier is still a real supplier.
+  types         String  @default("")
   website       String?
   contactPerson String?
   email         String?
@@ -130,25 +139,26 @@ model Exporter {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  allocations ProjectExporter[]
+  allocations ProjectSupplier[]
 
   @@index([deletedAt])
   @@index([companyName])
+  @@index([types])
 }
 
-/// One exporter's share of one project.
+/// One supplier's share of one project.
 ///
 /// A 5,00,000-piece order might be split 2,00,000 / 2,00,000 / 1,00,000 across
-/// three exporters. The shares may add up to less than the project's total
+/// three suppliers. The shares may add up to less than the project's total
 /// quantity — work that has not been placed yet — but never to more.
-model ProjectExporter {
+model ProjectSupplier {
   id         String   @id @default(cuid())
   projectId  String
   project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  exporterId String
-  exporter   Exporter @relation(fields: [exporterId], references: [id], onDelete: Cascade)
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 
-  /// Pieces (or whatever the project's unit is) this exporter is making.
+  /// Pieces (or whatever the project's unit is) this supplier is making.
   quantity Int
   /// Order within the project, so the split reads the way it was entered.
   position Int @default(0)
@@ -159,7 +169,7 @@ model ProjectExporter {
   deletedAt DateTime?
 
   @@index([projectId])
-  @@index([exporterId])
+  @@index([supplierId])
   @@index([deletedAt])
 }
 
@@ -168,9 +178,9 @@ model Project {
   clientId String
   client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-  /// Which exporters are making this order, and how much each is making.
-  /// A project may be split across several — see ProjectExporter.
-  exporters ProjectExporter[]
+  /// Which suppliers are making this order, and how much each is making.
+  /// A project may be split across several — see ProjectSupplier.
+  suppliers ProjectSupplier[]
 
   product String
   /// The agent's own reference for this order, issued by the app — see

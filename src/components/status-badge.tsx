@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   CAMPAIGN_STATUS_LABELS,
   CLIENT_STATUS_LABELS,
+  SUPPLIER_TYPE_LABELS,
   PROJECT_STATUS_LABELS,
   RECIPIENT_STATUS_LABELS,
   SAMPLING_STATUS_LABELS,
@@ -52,4 +53,20 @@ export function RecipientStatusBadge({ status }: { status: string }) {
   const variant =
     status === "FAILED" ? "destructive" : status === "SENT" ? "secondary" : "outline";
   return <Badge variant={variant}>{label(RECIPIENT_STATUS_LABELS, status)}</Badge>;
+}
+
+/** What a supplier does. Several are normal, so these read as a row of chips. */
+export function SupplierTypeBadges({ types }: { types: readonly string[] }) {
+  if (types.length === 0) {
+    return <span className="text-sm text-muted-foreground">Unclassified</span>;
+  }
+  return (
+    <span className="flex flex-wrap gap-1">
+      {types.map((type) => (
+        <Badge key={type} variant="secondary">
+          {label(SUPPLIER_TYPE_LABELS, type)}
+        </Badge>
+      ))}
+    </span>
+  );
 }

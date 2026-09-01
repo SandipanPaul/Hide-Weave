@@ -28,14 +28,14 @@ function revalidateProject(id?: string, clientId?: string) {
 
 function projectFormValues(formData: FormData) {
   // Parallel fields, one pair per row of the split, read positionally: the
-  // form renders an exporter picker and a quantity box side by side.
-  const exporterIds = formData.getAll("exporterId");
-  const quantities = formData.getAll("exporterQuantity");
+  // form renders a supplier picker and a quantity box side by side.
+  const supplierIds = formData.getAll("supplierId");
+  const quantities = formData.getAll("supplierQuantity");
 
   return {
     clientId: formData.get("clientId"),
-    exporters: exporterIds.map((exporterId, index) => ({
-      exporterId: String(exporterId ?? ""),
+    suppliers: supplierIds.map((supplierId, index) => ({
+      supplierId: String(supplierId ?? ""),
       quantity: quantities[index] ?? "",
     })),
     product: formData.get("product"),
@@ -59,7 +59,7 @@ function projectFormValues(formData: FormData) {
  */
 async function checkReferences(
   clientId: string,
-  exporters: ReadonlyArray<{ exporterId: string }>,
+  suppliers: ReadonlyArray<{ supplierId: string }>,
 ): Promise<ActionResult<never> | null> {
   const client = await prisma.client.findFirst({
     where: { id: clientId, ...notDeleted },
@@ -67,29 +67,29 @@ async function checkReferences(
   });
   if (!client) return failure("Choose a client that still exists.", "clientId");
 
-  const ids = exporters.map((allocation) => allocation.exporterId);
+  const ids = suppliers.map((allocation) => allocation.supplierId);
   if (ids.length > 0) {
-    const found = await prisma.exporter.findMany({
+    const found = await prisma.supplier.findMany({
       where: { id: { in: ids }, ...notDeleted },
       select: { id: true },
     });
     if (found.length !== new Set(ids).size) {
-      return failure("One of those exporters no longer exists.", "exporters");
+      return failure("One of those suppliers no longer exists.", "suppliers");
     }
   }
   return null;
 }
 
 /** Nested-create rows for a project's split, numbered in the given order. */
-function allocationRows(exporters: ReadonlyArray<{ exporterId: string; quantity: number }>) {
-  return exporters.map((allocation, position) => ({ ...allocation, position }));
+function allocationRows(suppliers: ReadonlyArray<{ supplierId: string; quantity: number }>) {
+  return suppliers.map((allocation, position) => ({ ...allocation, position }));
 }
 
 /** The shape both create and update write, once dates are real Dates. */
 function projectData(input: z.infer<typeof projectInputSchema>) {
   const { orderDate, expectedDelivery, actualDelivery, ...rest } = input;
-  const { exporters, ...columns } = rest;
-  void exporters;
+  const { suppliers, ...columns } = rest;
+  void suppliers;
   return {
     ...columns,
     orderDate: dateOnlyToUtc(orderDate),
@@ -105,7 +105,7 @@ export async function createProject(
   const parsed = projectInputSchema.safeParse(projectFormValues(formData));
   if (!parsed.success) return invalid(parsed.error);
 
-  const badReference = await checkReferences(parsed.data.clientId, parsed.data.exporters);
+  const badReference = await checkReferences(parsed.data.clientId, parsed.data.suppliers);
   if (badReference) return badReference;
 
   try {
@@ -118,7 +118,7 @@ export async function createProject(
         data: {
           ...projectData(parsed.data),
           orderId: await reserveOrderId(tx),
-          exporters: { create: allocationRows(parsed.data.exporters) },
+          suppliers: { create: allocationRows(parsed.data.suppliers) },
         },
       }),
     );
@@ -145,7 +145,7 @@ export async function updateProject(
   });
   if (!existing) return failure("This project no longer exists.");
 
-  const badReference = await checkReferences(parsed.data.clientId, parsed.data.exporters);
+  const badReference = await checkReferences(parsed.data.clientId, parsed.data.suppliers);
   if (badReference) return badReference;
 
   // Payments and expenses are both held in the project's currency, so changing
@@ -174,12 +174,12 @@ export async function updateProject(
     // The split is a value, not a record with a history of its own, so it is
     // replaced wholesale rather than reconciled row by row.
     await prisma.$transaction([
-      prisma.projectExporter.deleteMany({ where: { projectId: id } }),
+      prisma.projectSupplier.deleteMany({ where: { projectId: id } }),
       prisma.project.update({
         where: { id },
         data: {
           ...projectData(parsed.data),
-          exporters: { create: allocationRows(parsed.data.exporters) },
+          suppliers: { create: allocationRows(parsed.data.suppliers) },
         },
       }),
     ]);

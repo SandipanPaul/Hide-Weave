@@ -16,7 +16,7 @@ import { basename, join, resolve } from "node:path";
  */
 
 export const DEFAULT_BACKUP_DIR = "backups";
-export const DEFAULT_KEEP = 14;
+const DEFAULT_KEEP = 14;
 
 /** `file:./prisma/dev.db` and `./prisma/dev.db` both mean the same path. */
 export function databaseFile(databaseUrl = process.env.DATABASE_URL): string {
@@ -92,7 +92,7 @@ export function verifyBackup(path: string): Record<string, number> {
   const db = new Database(path, { readonly: true });
   try {
     const counts: Record<string, number> = {};
-    for (const table of ["Client", "Project", "Payment", "Exporter", "ClientSampling"]) {
+    for (const table of ["Client", "Project", "Payment", "Supplier", "ClientSampling"]) {
       const row = db.prepare(`SELECT COUNT(*) AS n FROM "${table}"`).get() as { n: number };
       counts[table] = row.n;
     }

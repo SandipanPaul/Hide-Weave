@@ -179,7 +179,7 @@ describe("samplingInputSchema", () => {
   });
 });
 
-describe("projectInputSchema — the exporter split", () => {
+describe("projectInputSchema — the supplier split", () => {
   const base = {
     clientId: "c1",
     product: "Basmati rice",
@@ -190,31 +190,31 @@ describe("projectInputSchema — the exporter split", () => {
     orderDate: "2026-08-01",
   };
 
-  const parse = (exporters: unknown) =>
-    projectInputSchema.safeParse({ ...base, exporters });
+  const parse = (suppliers: unknown) =>
+    projectInputSchema.safeParse({ ...base, suppliers });
 
-  it("accepts a 5,00,000 order split 2 / 2 / 1 lakh across three exporters", () => {
+  it("accepts a 5,00,000 order split 2 / 2 / 1 lakh across three suppliers", () => {
     const result = parse([
-      { exporterId: "e1", quantity: "200000" },
-      { exporterId: "e2", quantity: "200000" },
-      { exporterId: "e3", quantity: "100000" },
+      { supplierId: "e1", quantity: "200000" },
+      { supplierId: "e2", quantity: "200000" },
+      { supplierId: "e3", quantity: "100000" },
     ]);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.exporters).toHaveLength(3);
-      expect(result.data.exporters.reduce((n, e) => n + e.quantity, 0)).toBe(500_000);
+      expect(result.data.suppliers).toHaveLength(3);
+      expect(result.data.suppliers.reduce((n, e) => n + e.quantity, 0)).toBe(500_000);
     }
   });
 
   it("accepts a split that adds up to less than the order", () => {
     // Work that has not been placed with anyone yet.
-    expect(parse([{ exporterId: "e1", quantity: "200000" }]).success).toBe(true);
+    expect(parse([{ supplierId: "e1", quantity: "200000" }]).success).toBe(true);
   });
 
   it("refuses a split that adds up to more than the order", () => {
     const result = parse([
-      { exporterId: "e1", quantity: "300000" },
-      { exporterId: "e2", quantity: "300000" },
+      { supplierId: "e1", quantity: "300000" },
+      { supplierId: "e2", quantity: "300000" },
     ]);
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -223,10 +223,10 @@ describe("projectInputSchema — the exporter split", () => {
     }
   });
 
-  it("refuses the same exporter twice", () => {
+  it("refuses the same supplier twice", () => {
     const result = parse([
-      { exporterId: "e1", quantity: "100000" },
-      { exporterId: "e1", quantity: "100000" },
+      { supplierId: "e1", quantity: "100000" },
+      { supplierId: "e1", quantity: "100000" },
     ]);
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -235,23 +235,23 @@ describe("projectInputSchema — the exporter split", () => {
   });
 
   it("ignores the empty row the form always renders", () => {
-    const result = parse([{ exporterId: "", quantity: "" }]);
+    const result = parse([{ supplierId: "", quantity: "" }]);
     expect(result.success).toBe(true);
-    if (result.success) expect(result.data.exporters).toEqual([]);
+    if (result.success) expect(result.data.suppliers).toEqual([]);
   });
 
   it("refuses a quantity with nobody to make it", () => {
     // Someone started the row and did not finish it.
-    expect(parse([{ exporterId: "", quantity: "1000" }]).success).toBe(false);
+    expect(parse([{ supplierId: "", quantity: "1000" }]).success).toBe(false);
   });
 
-  it("refuses an exporter with no quantity", () => {
-    expect(parse([{ exporterId: "e1", quantity: "" }]).success).toBe(false);
-    expect(parse([{ exporterId: "e1", quantity: "0" }]).success).toBe(false);
-    expect(parse([{ exporterId: "e1", quantity: "1.5" }]).success).toBe(false);
+  it("refuses a supplier with no quantity", () => {
+    expect(parse([{ supplierId: "e1", quantity: "" }]).success).toBe(false);
+    expect(parse([{ supplierId: "e1", quantity: "0" }]).success).toBe(false);
+    expect(parse([{ supplierId: "e1", quantity: "1.5" }]).success).toBe(false);
   });
 
-  it("accepts an order with no exporters at all", () => {
+  it("accepts an order with no suppliers at all", () => {
     expect(parse([]).success).toBe(true);
   });
 });
@@ -325,7 +325,7 @@ describe("expense input", () => {
 describe("order value", () => {
   const orderForm = (orderValue: string) => ({
     clientId: "c1",
-    exporters: [],
+    suppliers: [],
     product: "Leather satchels",
     orderId: "ORD-1",
     quantity: "10",

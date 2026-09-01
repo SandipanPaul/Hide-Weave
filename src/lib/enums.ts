@@ -142,3 +142,38 @@ export const RECIPIENT_STATUS_LABELS: Record<RecipientStatus, string> = {
   SENT: "Sent",
   FAILED: "Failed",
 };
+
+/**
+ * What a supplier does for us.
+ *
+ * A list rather than one value: many Indian leather companies tan hides *and*
+ * export finished goods, and a great many OEM factories also run private
+ * label. Forcing a single label would make the record wrong about the half it
+ * had to drop.
+ */
+export const SUPPLIER_TYPES = ["TANNERY", "EXPORTER", "OEM_FACTORY", "PRIVATE_LABEL"] as const;
+export type SupplierType = (typeof SUPPLIER_TYPES)[number];
+
+export const SUPPLIER_TYPE_LABELS: Record<SupplierType, string> = {
+  TANNERY: "Tannery",
+  EXPORTER: "Exporter",
+  OEM_FACTORY: "OEM factory",
+  PRIVATE_LABEL: "Private label",
+};
+
+/** What each one means, for the form — these are not obvious to everyone. */
+export const SUPPLIER_TYPE_HINTS: Record<SupplierType, string> = {
+  TANNERY: "Tans hides into leather",
+  EXPORTER: "Ships finished goods abroad",
+  OEM_FACTORY: "Makes to a client's own design",
+  PRIVATE_LABEL: "Makes goods sold under the client's brand",
+};
+
+/** Stored as a comma-separated string; read back as a checked list. */
+export function parseSupplierTypes(value: string | null | undefined): SupplierType[] {
+  const wanted = new Set((value ?? "").split(",").map((part) => part.trim()));
+  // Filtered against the known list, in its order, so a stale value from an
+  // older version of the app cannot reach the UI and the badges always read
+  // in the same sequence.
+  return SUPPLIER_TYPES.filter((type) => wanted.has(type));
+}

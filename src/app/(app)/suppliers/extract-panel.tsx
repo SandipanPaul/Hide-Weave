@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Globe, Loader2, Search } from "lucide-react";
 import {
-  extractExporter,
+  extractSupplier,
   type ExtractionResult,
   type PickedField,
 } from "./extraction-actions";
@@ -33,7 +33,7 @@ export function ExtractPanel({ onExtracted }: { onExtracted: (result: Extraction
     setPicked([]);
 
     startExtraction(async () => {
-      const result = await extractExporter(url);
+      const result = await extractSupplier(url);
 
       if (!result.ok) {
         // Each failure has its own explanation — timeout, 403, robots.txt, a
@@ -60,7 +60,7 @@ export function ExtractPanel({ onExtracted }: { onExtracted: (result: Extraction
       } else if (result.existing) {
         setMessage({
           kind: "info",
-          text: `${result.existing.companyName} already uses this website — saving this as a new exporter will be refused.`,
+          text: `${result.existing.companyName} already uses this website — saving this as a new supplier will be refused.`,
         });
       } else {
         const also = result.alsoRead ? ` and ${new URL(result.alsoRead).pathname}` : "";
@@ -89,7 +89,7 @@ export function ExtractPanel({ onExtracted }: { onExtracted: (result: Extraction
             value={url}
             onChange={(event) => setUrl(event.target.value)}
             onKeyDown={(event) => {
-              // Enter would otherwise submit the exporter form underneath.
+              // Enter would otherwise submit the supplier form underneath.
               if (event.key === "Enter") {
                 event.preventDefault();
                 run();

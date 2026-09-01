@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Check, Loader2, RefreshCw } from "lucide-react";
-import { applyExtractedFields, extractExporter } from "../extraction-actions";
+import { applyExtractedFields, extractSupplier } from "../extraction-actions";
 import { ErrorNote } from "@/components/form/error-note";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -30,7 +30,7 @@ const COMPARED = [
 type Row = { key: string; label: string; before: string; after: string; from: string };
 
 /**
- * Reads the exporter's website again and shows what changed, field by field,
+ * Reads the supplier's website again and shows what changed, field by field,
  * before anything is written.
  *
  * Re-extraction never overwrites silently: each difference is accepted or
@@ -38,11 +38,11 @@ type Row = { key: string; label: string; before: string; after: string; from: st
  * a value worse than better.
  */
 export function ReExtractDialog({
-  exporterId,
+  supplierId,
   url,
   current,
 }: {
-  exporterId: string;
+  supplierId: string;
   /** Where to read: the URL it was extracted from, or its website. */
   url: string;
   current: Record<string, string>;
@@ -65,7 +65,7 @@ export function ReExtractDialog({
   const read = () => {
     reset();
     startWork(async () => {
-      const result = await extractExporter(url);
+      const result = await extractSupplier(url);
       if (!result.ok) {
         setError(result.message);
         return;
@@ -103,7 +103,7 @@ export function ReExtractDialog({
     }
 
     startWork(async () => {
-      const result = await applyExtractedFields(exporterId, values);
+      const result = await applyExtractedFields(supplierId, values);
       if (result.ok) {
         toast.success(
           `Updated ${Object.keys(values).length} field${

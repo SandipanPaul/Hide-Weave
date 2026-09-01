@@ -22,11 +22,11 @@ import {
 import { projectInputSchema } from "@/lib/schemas";
 
 /** One row of the split: who is making it, and how much. */
-export type ExporterRow = { exporterId: string; quantity: string };
+export type SupplierRow = { supplierId: string; quantity: string };
 
 export type ProjectFormValues = {
   clientId: string;
-  exporters: ExporterRow[];
+  suppliers: SupplierRow[];
   product: string;
   orderId: string;
   clientReference: string;
@@ -44,13 +44,13 @@ export type ProjectFormValues = {
 
 export type ProjectFormOptions = {
   clients: Array<{ id: string; name: string; currency: string }>;
-  exporters: Array<{ id: string; companyName: string }>;
+  suppliers: Array<{ id: string; companyName: string }>;
 };
 
-export function emptyProject(): ProjectFormValues {
+function emptyProject(): ProjectFormValues {
   return {
     clientId: "",
-    exporters: [],
+    suppliers: [],
     product: "",
     orderId: "",
     clientReference: "",
@@ -164,24 +164,24 @@ export function ProjectForm({
     ...options.clients.map((client) => ({ value: client.id, label: client.name })),
   ];
 
-  const exporterOptions = [
-    { value: "", label: "Choose an exporter…" },
-    ...options.exporters.map((exporter) => ({
-      value: exporter.id,
-      label: exporter.companyName,
+  const supplierOptions = [
+    { value: "", label: "Choose a supplier…" },
+    ...options.suppliers.map((supplier) => ({
+      value: supplier.id,
+      label: supplier.companyName,
     })),
   ];
 
   // Always show one row to type into, the way the contact fields do.
-  const exporterRows: ExporterRow[] =
-    values.exporters.length > 0 ? values.exporters : [{ exporterId: "", quantity: "" }];
+  const supplierRows: SupplierRow[] =
+    values.suppliers.length > 0 ? values.suppliers : [{ supplierId: "", quantity: "" }];
 
-  const setExporters = (rows: ExporterRow[]) => setValues((c) => ({ ...c, exporters: rows }));
+  const setSuppliers = (rows: SupplierRow[]) => setValues((c) => ({ ...c, suppliers: rows }));
 
-  const updateRow = (index: number, patch: Partial<ExporterRow>) =>
-    setExporters(exporterRows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  const updateRow = (index: number, patch: Partial<SupplierRow>) =>
+    setSuppliers(supplierRows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
 
-  const assigned = exporterRows.reduce((total, row) => total + (Number(row.quantity) || 0), 0);
+  const assigned = supplierRows.reduce((total, row) => total + (Number(row.quantity) || 0), 0);
   const ordered = Number(values.quantity) || 0;
   const remaining = ordered - assigned;
 
@@ -293,33 +293,33 @@ export function ProjectForm({
         </div>
 
         {/* Who is making it. A large order is often shared between several
-            exporters, so this is a list rather than a single choice, and it
+            suppliers, so this is a list rather than a single choice, and it
             adds up against the quantity above. */}
         <fieldset className="space-y-2 rounded-lg border p-3">
           <legend className="px-1 text-sm font-medium">
-            Exporters
+            Suppliers
             <span className="ml-1.5 font-normal text-muted-foreground">
               optional — who is making this order
             </span>
           </legend>
 
-          {exporterRows.map((row, index) => (
+          {supplierRows.map((row, index) => (
             <div
               key={index}
               className="grid grid-cols-[minmax(0,1fr)_8rem_2rem] items-start gap-2"
             >
               <SelectField
                 className="min-w-0"
-                label={index === 0 ? "Exporter" : `Exporter ${index + 1}`}
-                name="exporterId"
-                options={exporterOptions}
-                value={row.exporterId}
-                onValueChange={(value) => updateRow(index, { exporterId: value })}
+                label={index === 0 ? "Supplier" : `Supplier ${index + 1}`}
+                name="supplierId"
+                options={supplierOptions}
+                value={row.supplierId}
+                onValueChange={(value) => updateRow(index, { supplierId: value })}
               />
               <TextField
                 className="min-w-0"
                 label={index === 0 ? "Share" : `Share ${index + 1}`}
-                name="exporterQuantity"
+                name="supplierQuantity"
                 inputMode="numeric"
                 placeholder="0"
                 value={row.quantity}
@@ -333,14 +333,14 @@ export function ProjectForm({
                 <Label aria-hidden className="invisible select-none">
                   Remove
                 </Label>
-                {exporterRows.length > 1 ? (
+                {supplierRows.length > 1 ? (
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-sm"
                     className="mt-0.5"
-                    aria-label={`Remove exporter ${index + 1}`}
-                    onClick={() => setExporters(exporterRows.filter((_, i) => i !== index))}
+                    aria-label={`Remove supplier ${index + 1}`}
+                    onClick={() => setSuppliers(supplierRows.filter((_, i) => i !== index))}
                   >
                     <X className="size-4" aria-hidden />
                   </Button>
@@ -355,10 +355,10 @@ export function ProjectForm({
               variant="ghost"
               size="xs"
               className="text-muted-foreground"
-              onClick={() => setExporters([...exporterRows, { exporterId: "", quantity: "" }])}
+              onClick={() => setSuppliers([...supplierRows, { supplierId: "", quantity: "" }])}
             >
               <Plus className="size-3.5" aria-hidden />
-              Add another exporter
+              Add another supplier
             </Button>
 
             {/* The running total, so a split that does not add up is obvious
@@ -379,8 +379,8 @@ export function ProjectForm({
             ) : null}
           </div>
 
-          {errorFor("exporters") ? (
-            <p className="text-xs font-medium text-destructive">{errorFor("exporters")}</p>
+          {errorFor("suppliers") ? (
+            <p className="text-xs font-medium text-destructive">{errorFor("suppliers")}</p>
           ) : null}
         </fieldset>
 

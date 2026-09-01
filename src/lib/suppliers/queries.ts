@@ -1,14 +1,27 @@
+import { parseSupplierTypes, type SupplierType } from "@/lib/enums";
 import { notDeleted, prisma } from "@/lib/db";
 import { paginate, PAGE_SIZE, type ListParams, type Pagination } from "@/lib/list-params";
 import { foldCase, matchByKey } from "@/lib/keys";
 import { websiteKey } from "@/lib/url";
 
 /**
- * Reads for the Exporters tab. Everything here filters out soft-deleted rows
+ * Reads for the Suppliers tab. Everything here filters out soft-deleted rows
  * via `notDeleted`.
  */
 
-export const EXPORTER_SORT_COLUMNS = [
+/** How many suppliers of each kind, for the filter's counts. */
+export async function supplierTypeCounts(): Promise<Record<string, number>> {
+  const rows = await prisma.supplier.findMany({ where: notDeleted, select: { types: true } });
+  const counts: Record<string, number> = { ALL: rows.length, NONE: 0 };
+  for (const row of rows) {
+    const types = parseSupplierTypes(row.types);
+    if (types.length === 0) counts.NONE += 1;
+    for (const type of types) counts[type] = (counts[type] ?? 0) + 1;
+  }
+  return counts;
+}
+
+export const SUPPLIER_SORT_COLUMNS = [
   "companyName",
   "contactPerson",
   "email",
@@ -18,9 +31,10 @@ export const EXPORTER_SORT_COLUMNS = [
 ] as const;
 
 
-export type ExporterListRow = {
+export type SupplierListRow = {
   id: string;
   companyName: string;
+  types: SupplierType[];
   contactPerson: string | null;
   email: string | null;
   phone: string | null;
@@ -46,6 +60,7 @@ function searchWhere(q: string) {
 const LIST_SELECT = {
   id: true,
   companyName: true,
+  types: true,
   contactPerson: true,
   email: true,
   phone: true,
@@ -56,6 +71,7 @@ const LIST_SELECT = {
 type ListRecord = {
   id: string;
   companyName: string;
+  types: string;
   contactPerson: string | null;
   email: string | null;
   phone: string | null;
@@ -63,22 +79,34 @@ type ListRecord = {
   _count: { allocations: number };
 };
 
-function toRow(exporter: ListRecord): ExporterListRow {
-  const { _count, ...fields } = exporter;
-  return { ...fields, projectCount: _count.allocations };
+function toRow(supplier: ListRecord): SupplierListRow {
+  const { _count, ...fields } = supplier;
+  return { ...fields, types: parseSupplierTypes(fields.types), projectCount: _count.allocations };
 }
 
-export async function getExportersPage(
-  params: ListParams,
-): Promise<{ rows: ExporterListRow[]; pagination: Pagination }> {
-  const where = { ...notDeleted, ...searchWhere(params.q) };
-  const total = await prisma.exporter.count({ where });
+/**
+ * Narrows to one kind of supplier.
+ *
+ * `types` is a comma-separated column, so this is a substring match — safe
+ * only because no type name is a substring of another. `parseSupplierTypes`
+ * and this filter share SUPPLIER_TYPES, so adding a type that broke that
+ * would be caught by its test rather than by a wrong list.
+ */
+function typeWhere(type: string | undefined) {
+  return type && type !== "ALL" ? { types: { contains: type } } : {};
+}
+
+export async function getSuppliersPage(
+  params: ListParams & { type?: string },
+): Promise<{ rows: SupplierListRow[]; pagination: Pagination }> {
+  const where = { ...notDeleted, ...searchWhere(params.q), ...typeWhere(params.type) };
+  const total = await prisma.supplier.count({ where });
   const pagination = paginate(total, params.page, PAGE_SIZE);
 
   // The project count is an aggregate, so it cannot be pushed into orderBy;
   // rank the matching rows first and hydrate only the page being shown.
   if (params.sort === "projects") {
-    const candidates = await prisma.exporter.findMany({ where, select: LIST_SELECT });
+    const candidates = await prisma.supplier.findMany({ where, select: LIST_SELECT });
     const direction = params.dir === "asc" ? 1 : -1;
 
     const ranked = candidates.map(toRow).sort((a, b) => {
@@ -90,7 +118,7 @@ export async function getExportersPage(
     return { rows: ranked.slice(pagination.skip, pagination.skip + pagination.take), pagination };
   }
 
-  const exporters = await prisma.exporter.findMany({
+  const suppliers = await prisma.supplier.findMany({
     where,
     select: LIST_SELECT,
     orderBy: { [params.sort]: params.dir },
@@ -98,18 +126,18 @@ export async function getExportersPage(
     take: pagination.take,
   });
 
-  return { rows: exporters.map(toRow), pagination };
+  return { rows: suppliers.map(toRow), pagination };
 }
 
 /**
- * Full detail for one exporter, with the orders sourced through them.
+ * Full detail for one supplier, with the orders sourced through them.
  *
  * Order value is the headline here rather than commission: this measures how
- * much supply has been routed to this exporter, which is a different question
+ * much supply has been routed to this supplier, which is a different question
  * from what the agent earned on it.
  */
-export async function getExporter(id: string) {
-  const exporter = await prisma.exporter.findFirst({
+export async function getSupplier(id: string) {
+  const supplier = await prisma.supplier.findFirst({
     where: { id, ...notDeleted },
     include: {
       allocations: {
@@ -133,40 +161,40 @@ export async function getExporter(id: string) {
       },
     },
   });
-  if (!exporter) return null;
+  if (!supplier) return null;
 
   // What they are making, not what it is worth: money belongs to the order,
   // and lives on the project's own page.
-  const projects = exporter.allocations.map(({ project, quantity }) => ({
+  const projects = supplier.allocations.map(({ project, quantity }) => ({
     id: project.id,
     orderId: project.orderId,
     product: project.product,
     client: project.client,
     status: project.status,
     orderDate: project.orderDate,
-    /** This exporter's share of the order. */
+    /** This supplier's share of the order. */
     quantity,
     /** The whole order, for context when it is shared. */
     projectQuantity: project.quantity,
     unit: project.unit,
   }));
 
-  return { ...exporter, projects };
+  return { ...supplier, projects };
 }
 
 /**
- * Finds an exporter already using this website, ignoring scheme, "www." and a
+ * Finds a supplier already using this website, ignoring scheme, "www." and a
  * trailing slash — the same site arriving twice from two sources is one
- * exporter.
+ * supplier.
  *
  * Uniqueness lives here rather than in a database constraint so a deleted
- * exporter frees its website for reuse.
+ * supplier frees its website for reuse.
  */
 export async function findWebsiteConflict(
   website: string | null | undefined,
   excludeId?: string,
 ): Promise<{ id: string; companyName: string } | null> {
-  const candidates = await prisma.exporter.findMany({
+  const candidates = await prisma.supplier.findMany({
     where: { ...notDeleted, NOT: { website: null } },
     select: { id: true, companyName: true, website: true },
   });
@@ -179,12 +207,12 @@ export async function findWebsiteConflict(
   );
 }
 
-/** Finds an exporter with the same company name, ignoring case. */
-export async function findExporterNameConflict(
+/** Finds a supplier with the same company name, ignoring case. */
+export async function findSupplierNameConflict(
   companyName: string,
   excludeId?: string,
 ): Promise<{ id: string; companyName: string } | null> {
-  const candidates = await prisma.exporter.findMany({
+  const candidates = await prisma.supplier.findMany({
     where: notDeleted,
     select: { id: true, companyName: true },
   });

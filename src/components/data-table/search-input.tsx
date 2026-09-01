@@ -51,7 +51,7 @@ export function SearchInput({
 
   return (
     // Wide enough for the longest placeholder any tab passes in — at max-w-xs
-    // the exporters hint was cut to "Search company, contact, email, webs".
+    // the suppliers hint was cut to "Search company, contact, email, webs".
     // Still `w-full` underneath, so it shrinks on a narrow screen.
     <div className="relative w-full max-w-md">
       <Search

@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTempDatabase, type TempDatabase } from "./helpers/temp-database";
+import { formData } from "./helpers/actions";
 
 /**
  * Who a campaign actually gets written to, against a real database.
@@ -48,7 +49,8 @@ function recipientRows() {
   return rows;
 }
 
-function form(fields: {
+/** The campaign fields, as the compose screen submits them. */
+function campaignForm(fields: {
   subject: string;
   body: string;
   clientIds?: string[];
@@ -56,12 +58,13 @@ function form(fields: {
   cc?: string;
   files?: File[];
 }) {
-  const data = new FormData();
-  data.set("subject", fields.subject);
-  data.set("body", fields.body);
-  for (const id of fields.clientIds ?? []) data.append("clientId", id);
-  data.set("extraEmails", fields.extraEmails ?? "");
-  data.set("cc", fields.cc ?? "");
+  const data = formData({
+    subject: fields.subject,
+    body: fields.body,
+    clientId: fields.clientIds ?? [],
+    extraEmails: fields.extraEmails ?? "",
+    cc: fields.cc ?? "",
+  });
   for (const file of fields.files ?? []) data.append("attachment", file);
   return data;
 }
@@ -102,7 +105,7 @@ describe("createCampaign recipients", () => {
     addClient("c1", "Meridian Foods Ltd", "orders@meridian.example", "Daniel Okoro");
 
     const result = await create(
-      form({
+      campaignForm({
         subject: "Hello <name>",
         body: "Dear <name>,",
         clientIds: ["c1"],
@@ -133,7 +136,7 @@ describe("createCampaign recipients", () => {
     addClient("c1", "Acme", "jane@acme.example", "Jane Doe");
 
     await create(
-      form({
+      campaignForm({
         subject: "Hi",
         body: "Dear <name>,",
         clientIds: ["c1"],
@@ -150,7 +153,7 @@ describe("createCampaign recipients", () => {
 
   it("sends to typed addresses with no client chosen at all", async () => {
     const result = await create(
-      form({ subject: "Hi", body: "Dear <name>,", extraEmails: "solo@example.com" }),
+      campaignForm({ subject: "Hi", body: "Dear <name>,", extraEmails: "solo@example.com" }),
     );
 
     expect(result.ok).toBe(true);
@@ -159,7 +162,7 @@ describe("createCampaign recipients", () => {
 
   it("refuses an address it cannot read rather than dropping it", async () => {
     const result = await create(
-      form({ subject: "Hi", body: "Dear <name>,", extraEmails: "good@example.com, not-an-address" }),
+      campaignForm({ subject: "Hi", body: "Dear <name>,", extraEmails: "good@example.com, not-an-address" }),
     );
 
     expect(result.ok).toBe(false);
@@ -169,7 +172,7 @@ describe("createCampaign recipients", () => {
   });
 
   it("refuses a mailing with nobody to send to", async () => {
-    const result = await create(form({ subject: "Hi", body: "Dear <name>," }));
+    const result = await create(campaignForm({ subject: "Hi", body: "Dear <name>," }));
     expect(result.ok).toBe(false);
     expect(recipientRows()).toEqual([]);
   });
@@ -181,7 +184,7 @@ describe("createCampaign recipients", () => {
     connection.close();
 
     const result = await create(
-      form({ subject: "Hi", body: "Dear <name>,", clientIds: ["c1"], extraEmails: "x@example.com" }),
+      campaignForm({ subject: "Hi", body: "Dear <name>,", clientIds: ["c1"], extraEmails: "x@example.com" }),
     );
 
     expect(result.ok).toBe(true);
@@ -192,7 +195,7 @@ describe("createCampaign recipients", () => {
 describe("attachments", () => {
   it("stores the bytes, the name and the type, in the order chosen", async () => {
     const result = await create(
-      form({
+      campaignForm({
         subject: "Hi",
         body: "Dear <name>,",
         extraEmails: "a@example.com",
@@ -217,7 +220,7 @@ describe("attachments", () => {
 
   it("leaves nothing on disk when the mailing is refused", async () => {
     await create(
-      form({
+      campaignForm({
         subject: "Hi",
         body: "Dear <name>,",
         // No recipients at all, so the action refuses after the files are read.
@@ -231,7 +234,7 @@ describe("attachments", () => {
 
   it("removes the bytes when the mailing is deleted, keeping the record", async () => {
     await create(
-      form({
+      campaignForm({
         subject: "Hi",
         body: "Dear <name>,",
         extraEmails: "a@example.com",
@@ -254,7 +257,7 @@ describe("attachments", () => {
 
   it("refuses a file that is not a PDF or an image, and queues nothing", async () => {
     const result = await create(
-      form({
+      campaignForm({
         subject: "Hi",
         body: "Dear <name>,",
         extraEmails: "a@example.com",
@@ -271,7 +274,7 @@ describe("attachments", () => {
 
   it("refuses a selection over the size limit", async () => {
     const result = await create(
-      form({
+      campaignForm({
         subject: "Hi",
         body: "Dear <name>,",
         extraEmails: "a@example.com",
@@ -288,7 +291,7 @@ describe("attachments", () => {
   });
 
   it("is happy with no attachments at all", async () => {
-    const result = await create(form({ subject: "Hi", body: "Dear <name>,", extraEmails: "a@x.com" }));
+    const result = await create(campaignForm({ subject: "Hi", body: "Dear <name>,", extraEmails: "a@x.com" }));
     expect(result.ok).toBe(true);
     expect(attachmentRows()).toEqual([]);
   });
@@ -297,7 +300,7 @@ describe("attachments", () => {
 describe("cc", () => {
   it("stores the copy list on the mailing, normalised", async () => {
     await create(
-      form({
+      campaignForm({
         subject: "Hi",
         body: "Dear <name>,",
         extraEmails: "a@example.com",
@@ -314,7 +317,7 @@ describe("cc", () => {
 
   it("refuses a copy address it cannot read, and queues nothing", async () => {
     const result = await create(
-      form({ subject: "Hi", body: "Dear <name>,", extraEmails: "a@example.com", cc: "nope" }),
+      campaignForm({ subject: "Hi", body: "Dear <name>,", extraEmails: "a@example.com", cc: "nope" }),
     );
 
     expect(result.ok).toBe(false);
@@ -323,7 +326,7 @@ describe("cc", () => {
   });
 
   it("leaves cc null when nobody is copied", async () => {
-    await create(form({ subject: "Hi", body: "Dear <name>,", extraEmails: "a@example.com" }));
+    await create(campaignForm({ subject: "Hi", body: "Dear <name>,", extraEmails: "a@example.com" }));
 
     const connection = db.open();
     const row = connection.prepare(`SELECT cc FROM "Campaign"`).get() as { cc: string | null };

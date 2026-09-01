@@ -1,7 +1,7 @@
 import { normalizeWebsite } from "@/lib/url";
 
 /**
- * Pulls exporter details out of a fetched HTML page. Pure — no network, no
+ * Pulls supplier details out of a fetched HTML page. Pure — no network, no
  * database — so it can be tested against saved pages rather than live sites.
  *
  * Fields are filled in a fixed priority order, first hit wins per field:
@@ -20,7 +20,7 @@ export type ExtractionSource = "json-ld" | "meta" | "link" | "text" | "title";
 
 export type ExtractedField = { value: string; source: ExtractionSource };
 
-export type ExtractedExporter = {
+export type ExtractedSupplier = {
   companyName?: ExtractedField;
   email?: ExtractedField;
   phone?: ExtractedField;
@@ -96,7 +96,7 @@ function collapse(value: string): string {
 }
 
 /** The page with scripts, styles and markup removed — what a reader sees. */
-export function visibleText(html: string): string {
+function visibleText(html: string): string {
   const withoutCode = html
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
@@ -285,7 +285,7 @@ export function cleanPhone(raw: string): string | null {
 
 /**
  * A title reduced to the company name: sites write
- * "Asian Leather | Indian Leather Goods Manufacturer | Exporter", and the
+ * "Asian Leather | Indian Leather Goods Manufacturer | Supplier", and the
  * first segment is the name.
  */
 export function cleanCompanyName(title: string): string | null {
@@ -309,8 +309,8 @@ function take(
   return text ? { value: text, source } : undefined;
 }
 
-export function parseExporter(html: string): ExtractedExporter {
-  const result: ExtractedExporter = {};
+export function parseSupplier(html: string): ExtractedSupplier {
+  const result: ExtractedSupplier = {};
 
   // 1. JSON-LD describing the business itself.
   const businessNodes = jsonLdNodes(html)
@@ -333,7 +333,7 @@ export function parseExporter(html: string): ExtractedExporter {
 
   // 2. Open Graph and standard meta tags.
   // The same trimming as a title: exelfashions.com sets og:site_name to
-  // "XL Enterprises Limited - Leather Goods Manufacturer, Exporter, …".
+  // "XL Enterprises Limited - Leather Goods Manufacturer, Supplier, …".
   const siteName = metaContent(html, ["og:site_name", "application-name"]);
   result.companyName = take(
     result.companyName,
@@ -429,7 +429,7 @@ export function findContactLink(html: string, baseUrl: string): string | null {
       continue;
     }
     // Same site only: a "contact us" link to a marketplace profile is not this
-    // exporter's contact page.
+    // supplier's contact page.
     if (resolved.hostname.replace(/^www\./, "") !== base.hostname.replace(/^www\./, "")) continue;
     if (!/^https?:$/.test(resolved.protocol)) continue;
 
@@ -453,11 +453,11 @@ export function findContactLink(html: string, baseUrl: string): string | null {
 
 /** Later findings fill only the gaps the first page left. */
 export function mergeExtracted(
-  first: ExtractedExporter,
-  second: ExtractedExporter,
-): ExtractedExporter {
-  const merged: ExtractedExporter = { ...first };
-  for (const key of Object.keys(second) as Array<keyof ExtractedExporter>) {
+  first: ExtractedSupplier,
+  second: ExtractedSupplier,
+): ExtractedSupplier {
+  const merged: ExtractedSupplier = { ...first };
+  for (const key of Object.keys(second) as Array<keyof ExtractedSupplier>) {
     if (!merged[key]) merged[key] = second[key];
   }
   return merged;

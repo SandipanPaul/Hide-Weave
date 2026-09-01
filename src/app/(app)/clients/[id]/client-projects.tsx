@@ -25,7 +25,7 @@ type ProjectRow = {
   currency: string;
   status: string;
   orderDate: Date;
-  exporters: Array<{ quantity: number; exporter: { id: string; companyName: string } }>;
+  suppliers: Array<{ quantity: number; supplier: { id: string; companyName: string } }>;
 };
 
 /**
@@ -83,7 +83,7 @@ export function ClientProjects({ projects }: { projects: ProjectRow[] }) {
                 <TableRow>
                   <TableHead>Order ID</TableHead>
                   <TableHead>Product</TableHead>
-                  <TableHead>Exporter</TableHead>
+                  <TableHead>Supplier</TableHead>
                   <TableHead className="text-right">Order value</TableHead>
                   <TableHead className="text-right">Comm %</TableHead>
                   <TableHead className="text-right">Commission</TableHead>
@@ -104,9 +104,9 @@ export function ClientProjects({ projects }: { projects: ProjectRow[] }) {
                     </TableCell>
                     <TableCell>{project.product}</TableCell>
                     <TableCell className="max-w-[18ch] truncate text-muted-foreground">
-                      {project.exporters.length === 0
+                      {project.suppliers.length === 0
                         ? "—"
-                        : project.exporters.map((a) => a.exporter.companyName).join(", ")}
+                        : project.suppliers.map((a) => a.supplier.companyName).join(", ")}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatMoney(project.orderValue, project.currency)}

@@ -1,6 +1,6 @@
 # Hide & Weave
 
-Internal management app for a commission agent: clients place orders, exporters
+Internal management app for a commission agent: clients place orders, suppliers
 supply the goods, and the agent earns a percentage of the order value.
 
 Single user, single password, runs locally or on a small VPS.
@@ -11,7 +11,7 @@ Single user, single password, runs locally or on a small VPS.
 npm install
 cp .env.example .env   # then fill in APP_PASSWORD and SESSION_SECRET
 npm run db:migrate     # creates prisma/dev.db and applies migrations
-npm run db:seed        # ~15 clients, 10 exporters, 50 projects, ~76 payments
+npm run db:seed        # ~15 clients, 10 suppliers, 50 projects, ~76 payments
 npm run dev            # http://localhost:3000
 ```
 
@@ -97,7 +97,7 @@ belongs to no single project.
   names come from `Intl`, so only the codes are hard-coded.
 - **Soft deletes.** Nothing is really deleted; rows get a `deletedAt`. Every
   query spreads `notDeleted` from [`src/lib/db.ts`](src/lib/db.ts).
-- **Uniqueness** (client name, order ID, exporter website) is enforced in server
+- **Uniqueness** (client name, order ID, supplier website) is enforced in server
   actions scoped to non-deleted rows, not by database constraints — a deleted
   row must not permanently reserve a name.
 - **Statuses are strings**, not Prisma enums, with the allowed values owned by
@@ -133,7 +133,7 @@ one place rather than three:
 - [`runImport`](src/lib/csv/import-runner.ts) — the transaction every CSV
   import runs inside, including the roll-back-and-name-the-row behaviour.
 - [`matchByKey`](src/lib/keys.ts) — the uniqueness scan behind client names,
-  order IDs and exporter websites.
+  order IDs and supplier websites.
 
 ## CSV import
 
@@ -554,9 +554,45 @@ deleting or renaming a client never rewrites who was written to or where. The
 `clientId` link goes null and the row stays.
 
 
+## Suppliers
+
+The supply side: tanneries, exporters, OEM factories and private-label makers.
+
+It was called **Exporters** until a tannery needed to live in it, at which
+point the name was simply wrong — what the business sources from is broader
+than exporting. "Suppliers" covers all of it and sits opposite Clients: clients
+buy, suppliers make. The rename went all the way down, model included, because
+production had no supplier rows yet and doing it later never gets cheaper. The
+URL moved with it — `/exporters` is gone rather than redirected, as
+`/economics` was before it.
+
+### What they do
+
+A supplier can be **several kinds at once**, and usually is: a great many
+Indian leather companies tan hides *and* export finished goods, and plenty of
+OEM factories also run private label. `Supplier.types` is therefore a
+comma-separated list, not a single value — forcing one label would have made
+the record wrong about whichever half it had to drop. A supplier that is both a
+tannery and an exporter appears under both filters, which is the point.
+
+Unclassified is a legitimate state and reads as "Unclassified" rather than
+blank: a supplier nobody has categorised yet is still a real supplier, and the
+list should not imply otherwise.
+
+`parseSupplierTypes` returns the types in the order `SUPPLIER_TYPES` declares
+them, whatever order they were stored in, so the badges on a row do not shuffle
+between saves. It also drops any value the app no longer knows, so a type
+removed in a later version cannot reach the UI.
+
+The type filter matches with `contains` against that comma-separated column,
+which is safe only because no type name is a substring of another. Both it and
+`parseSupplierTypes` read from `SUPPLIER_TYPES`, so a future type that broke
+that assumption is caught by a test rather than by a quietly wrong list.
+
+
 ## Website extraction
 
-Paste an exporter's URL and the app reads the site to pre-fill the add form.
+Paste a supplier's URL and the app reads the site to pre-fill the add form.
 It never writes to the database: everything lands in the form marked
 `auto-filled`, alongside a list of what was picked up and where each value came
 from, so a wrong guess is obvious rather than buried. Editing a field clears
@@ -588,13 +624,13 @@ IPv4-mapped-IPv6 addresses are all refused, hostnames are resolved and their
 addresses checked, and redirects are followed by hand so every hop is checked
 too. This was not in the spec; it is not optional.
 
-The exporter detail page has **Re-read site**, which fetches again and shows a
+The supplier detail page has **Re-read site**, which fetches again and shows a
 field-by-field diff of old versus new. Nothing is pre-accepted and a blank
 never replaces a value you have — a site redesign is likelier to make a field
 worse than better.
 
 Tests run against
-[seven pages saved from real exporter sites](src/lib/extraction/__fixtures__),
+[seven pages saved from real supplier sites](src/lib/extraction/__fixtures__),
 never the live network.
 
 ## Deploying to a small VPS
@@ -866,13 +902,13 @@ Built in milestones. Current state:
 - [x] **2.** Clients tab: list, detail, manual add, samplings
 - [x] **3.** Reusable CSV import, wired into Clients
 - [x] **4.** Projects tab: list, detail, payments ledger, CSV import
-- [x] **5.** Exporters tab: CRUD, then website extraction
+- [x] **5.** Suppliers tab: CRUD, then website extraction
 - [x] **6.** Finances: tested aggregate functions, then the dashboard
 - [x] **7.** Polish: empty states, error handling, accessibility
 
 Added since:
 
-- Multiple exporters per project, with a quantity split
+- Multiple suppliers per project, with a quantity split
 - A `CHASING` client status, for names being pursued who have not ordered yet
 - Expenses, on an order and off it, and the Finances passbook
 - Retainer fees, logged by hand on the client and counted as income when they arrive

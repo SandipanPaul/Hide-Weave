@@ -116,15 +116,15 @@ test.describe("projects", () => {
     await expect(page.getByRole("button", { name: /^Edit payment of/ })).toHaveCount(1);
   });
 
-  test("splits one order across three exporters", async ({ page }) => {
+  test("splits one order across three suppliers", async ({ page }) => {
     const client = await addClientNamed(page, uniqueName("E2E Split Client"));
     const makers = ["E2E Maker One", "E2E Maker Two", "E2E Maker Three"];
     for (const name of makers) {
-      await page.goto("/exporters");
-      await page.getByRole("button", { name: "Add exporter" }).click();
+      await page.goto("/suppliers");
+      await page.getByRole("button", { name: "Add supplier" }).click();
       const dialog = page.getByRole("dialog");
       await dialog.getByLabel(/^Company name/).fill(name);
-      await dialog.getByRole("button", { name: "Add exporter" }).click();
+      await dialog.getByRole("button", { name: "Add supplier" }).click();
       await dialog.waitFor({ state: "hidden" });
     }
     await page.goto("/projects");
@@ -139,17 +139,17 @@ test.describe("projects", () => {
     await dialog.getByLabel("Order value").fill("2500000");
     await dialog.getByLabel("Commission %").fill("2");
 
-    await dialog.getByRole("combobox", { name: "Exporter", exact: true }).click();
+    await dialog.getByRole("combobox", { name: "Supplier", exact: true }).click();
     await page.getByRole("option", { name: makers[0] }).click();
     await dialog.getByLabel("Share", { exact: true }).fill("200000");
 
-    await dialog.getByRole("button", { name: "Add another exporter" }).click();
-    await dialog.getByRole("combobox", { name: "Exporter 2" }).click();
+    await dialog.getByRole("button", { name: "Add another supplier" }).click();
+    await dialog.getByRole("combobox", { name: "Supplier 2" }).click();
     await page.getByRole("option", { name: makers[1] }).click();
     await dialog.getByLabel("Share 2").fill("200000");
 
-    await dialog.getByRole("button", { name: "Add another exporter" }).click();
-    await dialog.getByRole("combobox", { name: "Exporter 3" }).click();
+    await dialog.getByRole("button", { name: "Add another supplier" }).click();
+    await dialog.getByRole("combobox", { name: "Supplier 3" }).click();
     await page.getByRole("option", { name: makers[2] }).click();
     await dialog.getByLabel("Share 3").fill("100000");
 
@@ -169,18 +169,18 @@ test.describe("projects", () => {
       await expect(page.getByRole("listitem").filter({ hasText: name })).toContainText(qty);
     }
 
-    // Each exporter's page shows their share of the value, not the whole order.
+    // Each supplier's page shows their share of the value, not the whole order.
     await page.getByRole("link", { name: makers[2] }).click();
     await expect(page.getByRole("row").filter({ hasText: orderId })).toContainText("5,00,000.00");
   });
 
   test("refuses a split that adds up to more than the order", async ({ page }) => {
     const client = await addClientNamed(page, uniqueName("E2E Over Client"));
-    await page.goto("/exporters");
-    await page.getByRole("button", { name: "Add exporter" }).click();
+    await page.goto("/suppliers");
+    await page.getByRole("button", { name: "Add supplier" }).click();
     let dialog = page.getByRole("dialog");
     await dialog.getByLabel(/^Company name/).fill("E2E Over Maker");
-    await dialog.getByRole("button", { name: "Add exporter" }).click();
+    await dialog.getByRole("button", { name: "Add supplier" }).click();
     await dialog.waitFor({ state: "hidden" });
 
     await page.goto("/projects");
@@ -192,7 +192,7 @@ test.describe("projects", () => {
     await dialog.getByLabel(/^Quantity/).fill("1000");
     await dialog.getByLabel("Order value").fill("50000");
     await dialog.getByLabel("Commission %").fill("2");
-    await dialog.getByRole("combobox", { name: "Exporter", exact: true }).click();
+    await dialog.getByRole("combobox", { name: "Supplier", exact: true }).click();
     await page.getByRole("option", { name: "E2E Over Maker" }).click();
     await dialog.getByLabel("Share", { exact: true }).fill("1500");
 

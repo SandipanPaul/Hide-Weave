@@ -283,10 +283,10 @@ export async function getClientProjects(clientId: string) {
     where: { clientId, ...notDeleted },
     orderBy: { orderDate: "desc" },
     include: {
-      exporters: {
+      suppliers: {
         where: notDeleted,
         orderBy: { position: "asc" },
-        select: { quantity: true, exporter: { select: { id: true, companyName: true } } },
+        select: { quantity: true, supplier: { select: { id: true, companyName: true } } },
       },
     },
   });

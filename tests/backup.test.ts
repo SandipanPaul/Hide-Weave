@@ -18,7 +18,7 @@ let dbPath: string;
 /** A database with the tables the scripts report counts for. */
 function makeDatabase(path: string, clients: number) {
   const db = new Database(path);
-  for (const table of ["Client", "Project", "Payment", "Exporter", "ClientSampling"]) {
+  for (const table of ["Client", "Project", "Payment", "Supplier", "ClientSampling"]) {
     db.exec(`CREATE TABLE "${table}" (id TEXT PRIMARY KEY, name TEXT)`);
   }
   const insert = db.prepare(`INSERT INTO "Client" (id, name) VALUES (?, ?)`);
