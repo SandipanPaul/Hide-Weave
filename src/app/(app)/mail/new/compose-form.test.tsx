@@ -150,6 +150,36 @@ describe("cc", () => {
     expect(screen.getByRole("button", { name: /send to 1 recipient/i })).toBeDisabled();
   });
 
+  it("takes several copy addresses at once", async () => {
+    const user = await renderForm();
+    await compose(user);
+    await user.click(screen.getByLabelText("Write to Meridian Foods Ltd"));
+    await user.type(
+      screen.getByLabelText(/copy to \(cc\)/i),
+      "boss@example.com, Ravi Kumar <ravi@example.com>",
+    );
+
+    await user.click(screen.getByRole("button", { name: /send to 1 recipient/i }));
+    await user.click(await screen.findByRole("button", { name: /send now/i }));
+
+    await waitFor(() => expect(createCampaign).toHaveBeenCalledTimes(1));
+    expect(createCampaign.mock.calls[0]![1].get("cc")).toBe(
+      "boss@example.com, Ravi Kumar <ravi@example.com>",
+    );
+  });
+
+  it("spells out the total when several people are copied", async () => {
+    const user = await renderForm();
+    await compose(user);
+    await user.click(screen.getByLabelText("Write to Meridian Foods Ltd"));
+    await user.click(screen.getByLabelText("Write to Sakura Import Co"));
+    await user.type(screen.getByLabelText(/copy to \(cc\)/i), "a@example.com, b@example.com");
+
+    // Two copied on two messages is four emails — the multiplication is the
+    // part people do not expect, so it is stated before the send.
+    expect(screen.getByText(/4 in total/i)).toBeInTheDocument();
+  });
+
   it("says how many copies the address will actually receive", async () => {
     const user = await renderForm();
     await compose(user);
@@ -157,9 +187,9 @@ describe("cc", () => {
     await user.click(screen.getByLabelText("Write to Sakura Import Co"));
     await user.type(screen.getByLabelText(/copy to \(cc\)/i), "boss@example.com");
 
-    // Each client gets their own message, so a CC lands twice here — the
-    // surprising part, and the reason it is spelled out.
-    expect(screen.getByText(/receives 2 emails/i)).toBeInTheDocument();
+    // Each client gets their own message, so a single CC lands twice here —
+    // the surprising part, and the reason it is spelled out.
+    expect(screen.getByText(/2 emails each/i)).toBeInTheDocument();
   });
 });
 

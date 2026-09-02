@@ -93,6 +93,11 @@ function rows() {
   return { recipients, campaign };
 }
 
+// Every address in these tests is on example.com, which resolves. The domain
+// check has its own tests; stubbing it here keeps the send tests off the
+// network and independent of whoever's DNS is answering.
+vi.mock("@/lib/mail/domains", () => ({ findDeadDomains: async () => new Map() }));
+
 vi.mock("@/lib/mail/settings", () => ({
   mailConfig: async () => ({ user: "agent@example.com", password: "x", fromName: "Agent" }),
 }));
@@ -386,5 +391,33 @@ describe("cc", () => {
 
     await (await loadRunner())("camp1");
     expect(keys).toEqual([false]);
+  });
+});
+
+describe("addresses that can never be delivered", () => {
+  it("is not sent to, and says why on the campaign", async () => {
+    vi.doMock("@/lib/mail/domains", () => ({
+      findDeadDomains: async () =>
+        new Map([["b@example.com", "The domain example.com does not exist, so this could never be delivered."]]),
+    }));
+    vi.resetModules();
+
+    seed([
+      { email: "a@example.com", greeting: "Ana" },
+      { email: "b@example.com", greeting: "Ben" },
+      { email: "c@example.com", greeting: "Cara" },
+    ]);
+
+    await (await loadRunner())("camp1");
+
+    // No SMTP attempt at all for the dead one — the bounce it would have
+    // caused lands in the sender's inbox, where this app cannot see it.
+    expect(sent).toEqual(["a@example.com", "c@example.com"]);
+
+    const { recipients, campaign } = rows();
+    expect(recipients.map((r) => r.status)).toEqual(["SENT", "FAILED", "SENT"]);
+    expect(recipients[1].error).toContain("does not exist");
+    // One bad address does not stop the mailing finishing.
+    expect(campaign.status).toBe("COMPLETED");
   });
 });

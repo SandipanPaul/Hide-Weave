@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import { readAttachment } from "@/lib/mail/attachment-store";
+import { findDeadDomains } from "@/lib/mail/domains";
 import { renderBody, toHtml } from "@/lib/mail/template";
 import { mailConfig } from "@/lib/mail/settings";
 import { mailTransport, type MailConfig } from "@/lib/mail/transport";
@@ -112,6 +113,20 @@ async function deliverPending(
   const transport = mailTransport(config);
   const from = `"${config.fromName}" <${config.user}>`;
 
+  // Addresses whose domain does not exist, checked once for the whole campaign
+  // rather than per message. Sending to these produces a bounce in the
+  // sender's own inbox minutes later, which this app cannot see — so the
+  // record would say SENT while nothing arrived. Better to refuse them here,
+  // where the reason ends up on the campaign for anyone to read.
+  const pending = await prisma.campaignRecipient.findMany({
+    where: { campaignId: campaign.id, status: "PENDING" },
+    select: { email: true },
+  });
+  const dead = await findDeadDomains(pending.map((row) => row.email));
+  if (dead.size > 0) {
+    console.info(`[mail] campaign ${campaign.id}: ${dead.size} address(es) on domains that do not exist`);
+  }
+
   // Read from disk once for the whole campaign, not once per recipient: the
   // same bytes go to everyone, and re-reading 15 MB a hundred times would be
   // the slowest thing in the loop by a wide margin.
@@ -162,6 +177,18 @@ async function deliverPending(
       select: { id: true, email: true, greeting: true, clientId: true },
     });
     if (!recipient) break;
+
+    const deadReason = dead.get(recipient.email);
+    if (deadReason) {
+      // Not attempted at all: there is nowhere for it to go. Checked before
+      // the pacing below, because that delay exists to be kind to the mail
+      // server and nothing is being sent to one here.
+      await prisma.campaignRecipient.update({
+        where: { id: recipient.id },
+        data: { status: "FAILED", error: deadReason },
+      });
+      continue;
+    }
 
     // Paced between messages, not before the first — nobody should wait a
     // second to find out their credentials are wrong.

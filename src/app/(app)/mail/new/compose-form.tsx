@@ -135,10 +135,14 @@ export function ComposeForm({ clients }: { clients: MailableClient[] }) {
             error={errors?.fieldErrors.cc?.[0]}
             hint={
               copies.recipients.length > 0
-                ? `Copied on all ${total} message${total === 1 ? "" : "s"}, so this address receives ${total} ${total === 1 ? "email" : "emails"}. Every client can see it.`
-                : "Optional. Anyone here is copied on every message and is visible to the client."
+                ? // Said per address, because the surprising part is the
+                  // multiplication: two people copied on forty messages is
+                  // eighty emails, and the numbers should be on screen before
+                  // the send rather than discovered afterwards.
+                  `${copies.recipients.length === 1 ? "This address is" : `Each of these ${copies.recipients.length} addresses is`} copied on all ${total} message${total === 1 ? "" : "s"} — ${total} ${total === 1 ? "email" : "emails"} each, ${total * copies.recipients.length} in total. Every client can see them.`
+                : "Optional. As many as you like, separated by commas — each is copied on every message and is visible to the client."
             }
-            placeholder="colleague@example.com"
+            placeholder="colleague@example.com, Ravi Kumar <ravi@example.com>"
           />
 
           {copies.invalid.length > 0 ? (
